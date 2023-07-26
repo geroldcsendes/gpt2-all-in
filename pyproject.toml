@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "gpt2"
+version = "0.0.0"
+description = "GPT2 all in"
+authors = ["Gerold Csendes"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+
+torch = "==2.0.0"
+numpy= "==1.21"
+einops= "==0.6"
+transformers= "==4.11"
+datasets= "==2.0"
+tensorboard= "==2.6"
+ipykernel= "==6.4"
+protobuf = "3.20.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+build-backend = "poetry.core.masonry.api"
