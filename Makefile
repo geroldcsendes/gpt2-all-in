@@ -1,4 +1,8 @@
+SHELL := /bin/bash
 poetry = poetry
+
+clone-cd:
+	git clone https://github.com/geroldcsendes/gpt2-all-in.git && cd gpt2-all-in
 
 conda-update:
 	conda env update -f env.yml
@@ -23,10 +27,6 @@ install-pyenv:
 	pyenv global 3.10.7 && \
 	pip install -U pip poetry==1.2.2 pre-commit && \
 	poetry config virtualenvs.in-project true
-
-
-SHELL := /bin/bash
-# Makefile to install and set up pyenv, Python 3.10.7, and Poetry 1.2.2 on the local machine
 
 install-apt-dependencies:
 	sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config gcc zlib1g-dev libbz2-dev libssl-dev libreadline-dev libsqlite3-dev libfreetype6-dev libblas-dev liblapack-dev gfortran wget curl libncurses5-dev xz-utils libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev jq zip unzip git
@@ -58,7 +58,9 @@ install-poetry:
 
 # this is needed for huggingface tokenizer
 install-rust:
+	@echo "Installing Rust for Huggingface tokenizer .."
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+	@source $HOME/.cargo/env
 
 poetry-install:
 	poetry install
