@@ -65,5 +65,15 @@ install-rust:
 poetry-install:
 	poetry install
 
+# config git so you can push to the remote
+git-config:
+	git config user.email gerold.csendes@gmail.com
+	git config user.name geroldcsendes
+
+
 setup-all: install-apt-dependencies setup-pyenv install-python install-poetry install-rust
 	@echo "Setup completed."
+
+# start remote tensorboard e.g. ip=127.000.000.00
+tensorboard-remote:
+	ssh -N -f -L localhost:16006:localhost:6006 ubuntu@$(ip)
