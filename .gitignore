@@ -2,4 +2,8 @@ data/
 logs/
 ckpt/
 .ipynb_checkpoints
-__pychache__
+__pychache__/
+
+# Environments
+.env
+.venv
