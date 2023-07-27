@@ -1,5 +1,6 @@
 from datetime import datetime
 import os.path as osp
+import os
 
 from tqdm import tqdm
 import torch as t
@@ -24,9 +25,18 @@ class Trainer:
         self.optimizer = getattr(t.optim, config.optimizer)
         self.criterion = t.nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
+        self.writer = None
+        self.ckpt_path = None
+
+        self._init_log()
+    
+    def _init_log(self):
         dt_now = datetime.now().strftime(format="%Y-%M-%d%H:%M:%S")
-        self.writer = SummaryWriter(osp.join(config.log_path, dt_now))
-        self.ckpt_path = osp.join(config.ckpt_path, dt_now)
+        self.writer = SummaryWriter(osp.join(self.config.log_path, dt_now))
+
+        self.ckpt_path = osp.join(self.config.ckpt_path, dt_now)
+        if not osp.exists(self.ckpt_path):
+            os.makedirs(self.ckpt_path)
 
     def train_step(self, batch: Tensor) -> Tensor:
         self.model.train()

@@ -3,7 +3,6 @@ import typing
 import torch as t
 from torch import Tensor
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 
 from gpt2.config import GPT2Config
 
@@ -48,7 +47,6 @@ class GPT2(nn.Module):
         return num_params
     
     def _init_weights(self, module: nn.Module):
-        print(module)
         if isinstance(module, (nn.Linear, nn.Embedding)): 
             module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
         
