@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "gpt2"
+name = "gpt2_ai"
 version = "0.0.0"
 description = "GPT2 all in"
 authors = ["Gerold Csendes"]

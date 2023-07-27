@@ -4,7 +4,7 @@ import torch as t
 from torch import Tensor
 import torch.nn as nn
 
-from gpt2.config import GPT2Config
+from gpt2_ai.config import GPT2Config
 
 class GPT2(nn.Module):
     def __init__(self, config: GPT2Config):

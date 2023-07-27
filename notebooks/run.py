@@ -4,9 +4,9 @@ from transformers import GPT2Tokenizer
 import torch as t
 from torch.utils.data import DataLoader, Dataset
 
-from gpt2.model import GPT2, CausalSelfAttention, Block
-from gpt2.trainer import Trainer
-from gpt2.config import GPT2Config, TrainerConfig
+from gpt2_ai.model import GPT2, CausalSelfAttention, Block
+from gpt2_ai.trainer import Trainer
+from gpt2_ai.config import GPT2Config, TrainerConfig
 
 if __name__ == "__main__":
     # %%

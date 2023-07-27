@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import GPT2Tokenizer
 from torch.utils.tensorboard import SummaryWriter
 
-from gpt2.config import GPT2Config
-from gpt2.model import GPT2
+from gpt2_ai.config import GPT2Config
+from gpt2_ai.model import GPT2
 
 class Trainer:
     def __init__(self, config: GPT2Config, model: GPT2,

@@ -80,3 +80,9 @@ tensorboard-remote:
 
 check-gpu:
 	watch nvidia-smi
+
+clean:
+	@echo "--- [CLEAN] $(module_name) ---"
+	rm -rf .venv
+	rm -rf *.egg-info
+	rm -rf .pytest_cache
