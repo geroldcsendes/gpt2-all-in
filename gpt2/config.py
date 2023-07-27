@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
+import torch as t
+
 
 @dataclass
 class GPT2Config:
@@ -22,7 +24,7 @@ class GPT2Config:
 class TrainerConfig:
     ckpt_path: str
     log_path: str
-    device: Literal["cpu", "cuda"] = "cpu"
+    device: Literal["cpu", "cuda"] = 'cuda' if t.cuda.is_available() else 'cpu'
     batch_size: int = 64
     lr: float = 6.25e-5
     optimizer: Literal["Adam", "AdamW"] = "Adam"

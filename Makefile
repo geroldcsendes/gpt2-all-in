@@ -77,3 +77,6 @@ setup-all: install-apt-dependencies setup-pyenv install-python install-poetry in
 # start remote tensorboard e.g. ip=127.000.000.00
 tensorboard-remote:
 	ssh -N -f -L localhost:16006:localhost:6006 ubuntu@$(ip)
+
+check-gpu:
+	watch nvidia-smi
