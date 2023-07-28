@@ -11,6 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from gpt2_ai.config import GPT2Config
 from gpt2_ai.model import GPT2
+from gpt2_ai.util.names import get_random_name
+
 
 class Trainer:
     def __init__(self, config: GPT2Config, model: GPT2,
@@ -31,8 +33,9 @@ class Trainer:
         self._init_log()
     
     def _init_log(self):
-        dt_now = datetime.now().strftime(format="%Y-%M-%d%H:%M:%S")
-        self.writer = SummaryWriter(osp.join(self.config.log_path, dt_now))
+        dt_now = datetime.now().strftime(format="%y%m%d%H")
+        run_name = f"{get_random_name()}-{dt_now}"
+        self.writer = SummaryWriter(osp.join(self.config.log_path, run_name))
 
         self.ckpt_path = osp.join(self.config.ckpt_path, dt_now)
         if not osp.exists(self.ckpt_path):
