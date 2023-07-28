@@ -1,15 +1,15 @@
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Optional
 
+from pydantic import BaseModel
 import torch as t
 
 
-@dataclass
-class GPT2Config:
+class GPT2Config(BaseModel):
     vocab_size: int = 50257
     n_ctx: int = 1024
     d_model: int = 768
-    d_mlp = 4 * d_model
+    d_mlp: int = 4 * d_model
     n_layer: int = 12
     n_head: int = 12
     resid_pdrop: float = 0.1
@@ -20,16 +20,15 @@ class GPT2Config:
     mlp_activation: Literal["GELU", "ReLU", "ELU"] = "GELU"
 
 
-@dataclass
-class TrainerConfig:
-    ckpt_path: str
-    log_path: str
+class TrainerConfig(BaseModel):
+    ckpt_path: str = './ckpt'
+    log_path: str = './logs'
     device: Literal["cpu", "cuda"] = 'cuda' if t.cuda.is_available() else 'cpu'
+    n_workers: int = 4
     batch_size: int = 64
     lr: float = 6.25e-5
     optimizer: Literal["Adam", "AdamW"] = "Adam"
     n_epochs: int = 1
     warmup_steps: int = 0
     log_interval: int = 100
-    ckpt_interval: int = 1000
- 
+    ckpt_interval: int = 100

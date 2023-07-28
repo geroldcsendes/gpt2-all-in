@@ -14,8 +14,8 @@ from gpt2_ai.model import GPT2
 
 class Trainer:
     def __init__(self, config: GPT2Config, model: GPT2,
-                 train_loader: DataLoader, valid_loader: DataLoader,
-                 tokenizer: GPT2Tokenizer):
+                 train_loader: DataLoader, tokenizer: GPT2Tokenizer,
+                 valid_loader=None):
         
         self.config = config
         self.model = model
@@ -64,16 +64,9 @@ class Trainer:
             for batch in self.train_loader:
                 
                 opt.zero_grad()
+                batch = batch['input_ids'].to(self.config.device)
 
-                batch = self.tokenizer(
-                    batch['text'], return_tensors='pt',
-                    return_attention_mask=False,
-                    max_length=self.model.config.n_ctx,
-                    padding='max_length', truncation=True)
-
-                batch.to(self.config.device)
-
-                loss = self.train_step(batch['input_ids'])
+                loss = self.train_step(batch)
                 loss.backward()
                 opt.step()
 
@@ -89,4 +82,3 @@ class Trainer:
                 print(f"Step: {step} | Loss: {loss.item():.3f}")
 
         return
-

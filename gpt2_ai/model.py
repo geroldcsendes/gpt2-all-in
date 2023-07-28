@@ -25,8 +25,12 @@ class GPT2(nn.Module):
         self.unembed = nn.Linear(config.d_model, config.vocab_size)
 
         # init
-        self.init_weight_scale = 1 / (config.n_layer ** 0.5)
         self.apply(self._init_weights)
+        # residual projections initialized uniquely
+        std = self.config.initializer_range / (self.config.n_layer ** 0.5)
+        for pn, p in self.named_parameters():
+            if pn.endswith('WO'):
+                t.nn.init.normal_(p, mean=0.0, std=std)
 
         
     def forward(self, input_ids: Tensor) -> Tensor:
@@ -40,25 +44,29 @@ class GPT2(nn.Module):
 
         return x
     
-    def _count_params(self) -> int:
+    def count_params(self, non_embed=True) -> int:
         num_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        if non_embed:
+            num_params -= (self.embedding.weight.numel() + self.pos_embedding.weight.numel())
+        
         print(f"Number of trainable parameters: {num_params:,}")
         
-        return num_params
+        # return num_params
+        # n_params = sum(p.numel() for p in self.parameters())
+        # if non_embed:
+        #     n_params -= self.pos_embedding.weight.numel()
+        # return n_params
     
     def _init_weights(self, module: nn.Module):
         if isinstance(module, (nn.Linear, nn.Embedding)): 
-            module.weight.data.normal_(mean=0.0, std=self.config.initializer_range)
-        
-        if isinstance(module, nn.Linear):
-            with t.no_grad():
-                module.weight *= self.init_weight_scale
+            module.weight.data.normal_(
+                mean=0.0, std=self.config.initializer_range)
 
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: GPT2Config):
         super().__init__()
-        
+
         self.config = config
         self.d_head = int(config.d_model / config.n_head)
 
@@ -66,34 +74,38 @@ class CausalSelfAttention(nn.Module):
         self.W_K = nn.Linear(config.d_model, config.d_model)
         self.W_V = nn.Linear(config.d_model, config.d_model)
 
-        self.W_O = nn.Linear(self.d_head, config.d_model)
+        self.W_O = nn.Linear(config.d_model, config.d_model)
         self.register_buffer("mask", t.tril(t.ones(config.n_ctx, config.n_ctx)))
 
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
+        self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(self, x: Tensor) -> Tensor:
         
-        batch_size, seq_len, d_model = x.size()
+        B, T, E = x.size()
+        dh = self.d_head
+        nh = self.config.n_head
 
-        # [batch_size, seq_len, d_model]
-        Q = self.W_Q(x).view((batch_size, seq_len, self.config.n_head, self.d_head))
-        K = self.W_K(x).view((batch_size, seq_len, self.config.n_head, self.d_head))    
-        V = self.W_V(x).view((batch_size, seq_len, self.config.n_head, self.d_head))    
+        # [B, T, E] -> [B, nh, T, dh]
+        Q = self.W_Q(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()
+        K = self.W_K(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()    
+        V = self.W_V(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()    
 
-        Q = Q.permute(0, 2, 1, 3).contiguous()
-        K = K.permute(0, 2, 3, 1).contiguous()
-        V = V.permute(0, 2, 1, 3).contiguous()            
-
-        QK = Q @ K / t.sqrt(t.tensor(self.d_head))  # [batch_size, n_head, seq_len, seq_len]
+        # [B, nh, T, dh] x [B, nh, dh, T] -> [B, nh, T, T]
+        QK = (Q @ K.transpose(-2, -1)) / t.sqrt(t.tensor(self.d_head))  
         QK.masked_fill_(self.mask == 0, -1e5)
         
         A = t.softmax(QK, dim=-1)
+        A = self.attn_dropout(A)
 
-        Z = A @ V  # [batch_size, n_head, seq_len, d_head]
+        # [[B, nh, T, T] x [B, nh, T, d_head]] -> [B, nh, T, dh]
+        Z = A @ V
+        # re-assemble all head outputs side by side
+        Z = Z.transpose(1, 2).contiguous().view(B, T, E) 
+        
+        Z = self.W_O(Z)  # [batch_size, seq_len, d_model]
 
-        Z = t.sum(self.W_O(Z), dim=1)  # [batch_size, seq_len, d_model]
-
-        Z = self.attn_dropout(Z)
+        Z = self.resid_dropout(Z)
 
         return Z
         
@@ -104,10 +116,12 @@ class MLP(nn.Module):
         self.fc1 = nn.Linear(config.d_model, config.d_mlp)
         self.fc2 = nn.Linear(config.d_mlp, config.d_model)
         self.act = getattr(t.nn, config.mlp_activation)()
+        self.dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.act(self.fc1(x))
         x = self.fc2(x)
+        x = self.dropout(x)
 
         return x
 
@@ -120,13 +134,9 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(config.d_model)
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
-        self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(self, x: Tensor):
         x = x + self.attn(self.ln1(x))
-        x = x + self.resid_dropout(self.mlp(self.ln2(x)))
-
         x = x + self.mlp(self.ln2(x))
-        x = x + self.resid_dropout(self.mlp(self.ln2(x)))
 
         return x
