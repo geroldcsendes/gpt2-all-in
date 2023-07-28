@@ -1,0 +1,15 @@
+{
+    "dataset": "full",
+    "model": 
+        {
+            "n_ctx": 1024
+        },
+    "trainer":
+        {
+            "n_epochs": 2,
+            "batch_size": 256,
+            "log_interval": 5,
+            "ckpt_interval": 5,
+            "n_workers": 16
+        }
+}
