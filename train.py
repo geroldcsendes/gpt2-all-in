@@ -98,6 +98,8 @@ if __name__ == "__main__":
     model = GPT2(conf_model)
     model.to(device)
 
+    print("Number of trainable parameters:", model.count_params())
+
     trainer = Trainer(config=conf_trainer,
                       model=model,
                       train_loader=loader,
