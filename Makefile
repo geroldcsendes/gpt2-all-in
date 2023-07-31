@@ -1,42 +1,16 @@
 SHELL := /bin/bash
 poetry = poetry
 
-clone-cd:
-	git clone https://github.com/geroldcsendes/gpt2-all-in.git && cd gpt2-all-in
-
-conda-update:
-	conda env update -f env.yml
-
-install:
-	poetry install
-
-register-jupyter:
-	@echo "--- [Registering venv to jupyter using ipykernel..] ---"
-	$(poetry) run python -m ipykernel  install --user --name=gpt2
-
-install-pyenv:
-	@if [ ! -d ~/.pyenv ]; then curl https://pyenv.run | bash; fi;
-	@/bin/bash ./add-pyenv-init.sh;
-	@source ./enable-pyenv.sh && \
-	pyenv uninstall -f 3.10.7 && pyenv install -f 3.10.7 && \
-	pyenv uninstall -f 3.8.12 && pyenv install -f 3.8.12 && \
-	rm -f ${HOME}/.local/bin/poetry && \
-	pyenv shell 3.8.12 && \
-	pip install -U pip poetry==1.2.2 pre-commit && \
-	pyenv shell --unset && \
-	pyenv global 3.10.7 && \
-	pip install -U pip poetry==1.2.2 pre-commit && \
-	poetry config virtualenvs.in-project true
-
+# Env: Pyenv + Poetry
 install-apt-dependencies:
 	sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config gcc zlib1g-dev libbz2-dev libssl-dev libreadline-dev libsqlite3-dev libfreetype6-dev libblas-dev liblapack-dev gfortran wget curl libncurses5-dev xz-utils libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev jq zip unzip git
 
 PYENV_INSTALL_COMMANDS = \
 	curl https://pyenv.run | bash; \
-	echo 'export PATH="$$HOME/.pyenv/bin:$$PATH"' >> ~/.bashrc; \
-	echo 'eval "$$(pyenv init -)"' >> ~/.bashrc; \
-	echo 'eval "$$(pyenv virtualenv-init -)"' >> ~/.bashrc; \
-	source ~/.bashrc;
+	@echo 'export PATH="$$HOME/.pyenv/bin:$$PATH"' >> ~/.bashrc; \
+	@echo 'eval "$$(pyenv init -)"' >> ~/.bashrc; \
+	@echo 'eval "$$(pyenv virtualenv-init -)"' >> ~/.bashrc; \
+	@source ~/.bashrc;
 
 setup-pyenv:
 	@echo "Installing and setting up pyenv..."
@@ -60,19 +34,42 @@ install-poetry:
 install-rust:
 	@echo "Installing Rust for Huggingface tokenizer .."
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-	@source $HOME/.cargo/env
+	@source $(HOME)/.cargo/env
 
-poetry-install:
+install-project:
 	poetry install
+
+setup-all: install-apt-dependencies setup-pyenv install-python install-poetry poetry-install install-rust install-project
+	@echo "Pyenv + poetry setup completed."
+	@source .venv/bin/activate
+
+# Env: Conda
+install-conda:
+	@echo "Installing Conda..."
+	wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+	@bash Miniconda3-latest-Linux-x86_64.sh
+	@echo "Conda installation completed."
+	@source ~/.bashrc
+
+create-conda-env:
+	conda env create -f env.yml
+	@conda activate gpt2-ai
+
+setup-conda-all: install-conda create-conda-env
+	@echo "Conda setup completed."
+
+# Other util stuff
+clone-cd:
+	git clone https://github.com/geroldcsendes/gpt2-all-in.git && cd gpt2-all-in
+
+register-jupyter:
+	@echo "--- [Registering venv to jupyter using ipykernel..] ---"
+	$(poetry) run python -m ipykernel  install --user --name=gpt2
 
 # config git so you can push to the remote
 git-config:
 	git config user.email gerold.csendes@gmail.com
 	git config user.name geroldcsendes
-
-
-setup-all: install-apt-dependencies setup-pyenv install-python install-poetry install-rust
-	@echo "Setup completed."
 
 # start remote tensorboard e.g. ip=127.000.000.00
 tensorboard-remote:
