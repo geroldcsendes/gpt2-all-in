@@ -23,8 +23,8 @@ class GPT2Config(BaseModel):
 class TrainerConfig(BaseModel):
     dataset: Literal["Skylion007/openwebtext", "stas/openwebtext-10k"]
     valid_dataset: Optional[str] = None
-    ckpt_path: str = './logs/ckpt'
-    log_path: str = './logs/tb'
+    ckpt_path: str = './logs'
+    log_path: str = './logs'
     device: Literal["cpu", "cuda"] = 'cuda' if t.cuda.is_available() else 'cpu'
     n_workers: int = 4
     batch_size: int = 64
