@@ -3,6 +3,7 @@ logs/
 ckpt/
 .ipynb_checkpoints
 __pychache__/
+*.pyc
 
 # Environments
 .env
