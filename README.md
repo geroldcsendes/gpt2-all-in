@@ -66,7 +66,7 @@ TODO
 ## How-to-train
 Training and model configurations are parsed from the configs/ directory. You can find 2 reference configs there: `cpu.json`,  `gpu.json`.
 
-NOTE that the device will be picked automatically from `torch.cuda.is_available()` and not from the configuration file. The cpu and gpu configs are there for reference only. The sample cpu config defines a small model that can be trained on a CPU. The gpu config defines a larger model that can be trained on a GPU.
+> NOTE that the device will be picked automatically from `torch.cuda.is_available()` and not from the configuration file. The cpu and gpu configs are there for reference only. The sample cpu config defines a small model that can be trained on a CPU. The gpu config defines a larger model that can be trained on a GPU.
 
 The configs should have 3 attributes: dataset, model and trainer as shown below:
 
@@ -87,11 +87,11 @@ The configs should have 3 attributes: dataset, model and trainer as shown below:
 }
 ```
 
-The dataset attribute is used to select the dataset to train on. For now, only two values are allowed: dev and full. The dev dataset is a small dataset that is used for debugging purposes and is mapped to [stas/openwebtext-10k](https://huggingface.co/datasets/stas/openwebtext-10k). The full dataset is the full dataset that is used for a 'proper' training and is mapped to [Skylion007/openwebtext](https://huggingface.co/datasets/Skylion007/openwebtext).
+The dataset attribute is used to select the dataset to train on. For now, only two values are allowed: dev and full. The dev dataset is a small dataset that is used for debugging purposes and is mapped to [stas/openwebtext-10k](https://huggingface.co/datasets/stas/openwebtext-10k). This is a 10k example subsample of openwebtext. The is used for a 'proper' training and is mapped to [Skylion007/openwebtext](https://huggingface.co/datasets/Skylion007/openwebtext) which is the full openwebtext dataset.
 
 The model attribute is used to construct the model configuration and is parsed to initialize the `GPT2Config` at _config.py_. 
 
-The trainer attribute is used to configure the training process and is parsed to initialize the `TrainerConfig` at __config.py__. 
+The trainer attribute is used to configure the training process and is parsed to initialize the `TrainerConfig` at _config.py_. 
 
 Default values in these two configuration classes will get overwritten by the values in the config file. You may experiment what configurations works best on which dataset and GPU.
 
@@ -101,7 +101,7 @@ python train.py --config {your-config-here}.json
 ```
 
 ### Logging
-A unique log directory will be created for each run under logs/. The following naming convention is used: <run-name>-<%y%m%d%H> e.g. jolly_ptolemy-23073110. The run name is created automatically and draws inspiration from Docker's fun container names. 
+A unique log directory will be created for each run under logs/. The following naming convention is used: `{run-name}-{%y%m%d%H}` e.g. jolly_ptolemy-23073110. The run name is created automatically and draws inspiration from Docker's fun container names. 
 
 The log directory consists of 1) a checkpoint directory and 2) a tensorboard directory and 3) a the training config file (for reproducibility). Here is an example log of a training run:
 
@@ -111,3 +111,21 @@ The log directory consists of 1) a checkpoint directory and 2) a tensorboard dir
 │   ├── config.json
 │   └── tb
 ```
+
+> NOTE Lambdalabs, by default, will not persist your data and you will lose them after terminating the instance. You will need to take care of persistance yourself. 
+
+### Monitoring training
+Tensorboard is used for monitoring training. You can start tensorboard by running:
+```bash
+make tensorboard-remote ip={your-remote-ip}
+```
+
+on your local machine. This will trasnfer the 6006 port of the remote server into the port 16006 of your local machine. Then, start tensorboard on the remote server by running:
+```bash
+tensorboard --logdir logs
+```
+
+Finally, open your browser and go to `localhost:16006` to see the training progress.
+
+You will see something like this: 
+![tensorboard](./img/tb-ex.png)
