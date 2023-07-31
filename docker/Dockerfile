@@ -38,3 +38,7 @@ RUN apt-get update && \
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
 ENV NVIDIA_REQUIRE_CUDA "cuda>=11.8"
+
+COPY env.yml poetry.lock pyproject.toml poetry.toml add-pyenv-init.sh enable-pyenv-init-sh Makefile ./
+RUN apt-get update && apt-get install -y build-essential cmake pkg-config gcc zlib1g-dev libbz2-dev libssl-dev libreadline-dev libsqlite3-dev libfreetype6-dev libblas-dev liblapack-dev gfortran wget curl libncurses5-dev xz-utils libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev jq zip unzip git
+RUN make setup-pyenv-poetry
