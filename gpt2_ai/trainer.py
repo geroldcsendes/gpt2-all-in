@@ -74,7 +74,6 @@ class Trainer:
         step = 0
         for epoch in tqdm(range(self.config.n_epochs)):
             
-            train_loss = 0.0
             for batch in self.train_loader:
                 
                 opt.zero_grad()
@@ -84,10 +83,8 @@ class Trainer:
                 loss.backward()
                 opt.step()
 
-                train_loss += loss.item() / batch.shape[0]
-
                 if step % self.config.log_interval == 0:
-                    self.writer.add_scalar('loss_train', train_loss, step)
+                    self.writer.add_scalar('loss_train', loss, step)
 
                 if step % self.config.ckpt_interval == 0:
                     t.save(self.model.state_dict(),
