@@ -1,15 +1,16 @@
 {
-    "dataset": "full",
+    "dataset": "dev",
     "model": 
         {
-            "n_ctx": 1024
+            "n_ctx": 1024,
+            "n_layer": 4
         },
     "trainer":
         {
             "n_epochs": 2,
-            "batch_size": 256,
+            "batch_size": 32,
             "log_interval": 5,
             "ckpt_interval": 5,
-            "n_workers": 16
+            "n_workers": 8
         }
 }

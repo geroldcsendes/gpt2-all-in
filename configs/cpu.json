@@ -9,6 +9,7 @@
         },
     "trainer":
         {
-            "n_epochs": 1
+            "n_epochs": 1,
+            "n_workers": 4
         }
 }
