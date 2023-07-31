@@ -43,11 +43,11 @@ def setup_loader(**kwargs) -> DataLoader:
 
     if dev:
         loader = DataLoader(ds, batch_size=conf_trainer.batch_size,
-                            shuffle=True, num_workers=conf_trainer.num_workers)
+                            shuffle=True, num_workers=conf_trainer.n_workers)
     else:
         ds = ds.shuffle(seed=seed, buffer_size=buffer_size)
         loader = DataLoader(ds, batch_size=conf_trainer.batch_size,
-                            num_workers=conf_trainer.num_workers)
+                            num_workers=conf_trainer.n_workers)
 
     return loader
 
@@ -103,7 +103,7 @@ if __name__ == "__main__":
                       train_loader=loader,
                       tokenizer=tokenizer)
     
-    dscr_output_dir = osp.join(conf_trainer.log_path, trainer.run_name, 'config')
+    dscr_output_dir = osp.join(conf_trainer.log_path, trainer.run_name, 'config.json')
     shutil.copy(dscr_name, dscr_output_dir)
 
     trainer.train()
