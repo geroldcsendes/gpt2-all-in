@@ -1,47 +1,30 @@
 SHELL := /bin/bash
 poetry = poetry
 
+CONDA_HOME = $(HOME)/miniconda3
+CONDA_BIN_DIR = $(CONDA_HOME)/bin
+CONDA = $(CONDA_BIN_DIR)/conda
+
 # Env: Pyenv + Poetry
 install-apt-dependencies:
 	sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config gcc zlib1g-dev libbz2-dev libssl-dev libreadline-dev libsqlite3-dev libfreetype6-dev libblas-dev liblapack-dev gfortran wget curl libncurses5-dev xz-utils libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev jq zip unzip git
 
-PYENV_INSTALL_COMMANDS = \
-	curl https://pyenv.run | bash; \
-	echo 'export PATH="$$HOME/.pyenv/bin:$$PATH"' >> ~/.bashrc; \
-	echo 'eval "$$(pyenv init -)"' >> ~/.bashrc; \
-	echo 'eval "$$(pyenv virtualenv-init -)"' >> ~/.bashrc; \
-	source ~/.bashrc;
-
-setup-pyenv:
-	@echo "Installing and setting up pyenv..."
-	$(PYENV_INSTALL_COMMANDS)
-	@echo "Pyenv installation and setup completed."
-
-install-python:
-	@echo "Installing Python 3.10.7..."
-	pyenv install 3.10.7
-	pyenv global 3.10.7
-	@echo "Python 3.10.7 installation completed."
-
-install-poetry:
-	@echo "Installing Poetry 1.2.2..."
-	pip install --upgrade pip
-	pip install poetry==1.2.2
-	poetry --version
-	@echo "Poetry 1.2.2 installation completed."
-
-# this is needed for huggingface tokenizer
-install-rust:
-	@echo "Installing Rust for Huggingface tokenizer .."
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-	@source $(HOME)/.cargo/env
-
-install-project:
+setup-pyenv-poetry: install-apt-dependencies 
+	@curl https://pyenv.run | bash;\
+	/bin/bash ./add-pyenv-init.sh;
+	@source ./enable-pyenv.sh && \
+	pyenv install 3.10.7 && \
+	pyenv global 3.10.7 && \
+	echo "Python 3.10.7 installation completed." && \
+	echo "Installing Poetry 1.2.2..." && \
+	pip install --upgrade pip && \
+	pip install poetry==1.2.2 && \
+	poetry --version && \
+	echo "Poetry 1.2.2 installation completed." && \
+	echo "Installing Rust for Huggingface tokenizer .." && \
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
+	source $(HOME)/.cargo/env && \
 	poetry install
-
-setup-all: install-apt-dependencies setup-pyenv install-python install-poetry install-rust install-project
-	@echo "Pyenv + poetry setup completed."
-	@source .venv/bin/activate
 
 # Env: Conda
 install-conda:
@@ -55,11 +38,11 @@ install-conda:
 	@echo "Conda installation completed."
 
 create-conda-env:
-	conda env create -f env.yml
-	@conda activate gpt2-ai
+	@echo "Creating conda env..."
+	$(CONDA) env create -f env.yml
+	@echo "Conda env creation completed."
 
-setup-conda-all: install-conda create-conda-env
-	@echo "Conda setup completed."
+setup-conda: install-conda create-conda-env
 
 # Other util stuff
 clone-cd:
