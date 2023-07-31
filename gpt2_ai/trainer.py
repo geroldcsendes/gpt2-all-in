@@ -35,9 +35,9 @@ class Trainer:
     def _init_log(self):
         dt_now = datetime.now().strftime(format="%y%m%d%H")
         run_name = f"{get_random_name()}-{dt_now}"
-        self.writer = SummaryWriter(osp.join(self.config.log_path, run_name))
+        self.writer = SummaryWriter(osp.join(self.config.log_path, run_name, 'tb'))
 
-        self.ckpt_path = osp.join(self.config.ckpt_path, run_name)
+        self.ckpt_path = osp.join(self.config.ckpt_path, run_name, 'ckpt')
         if not osp.exists(self.ckpt_path):
             os.makedirs(self.ckpt_path)
         
