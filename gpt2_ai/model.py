@@ -126,7 +126,6 @@ class MLP(nn.Module):
         return x
 
 
-
 class Block(nn.Module):
     def __init__(self, config: GPT2Config):
         super().__init__()

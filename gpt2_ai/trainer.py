@@ -91,12 +91,10 @@ class Trainer:
                            f"{self.ckpt_path}/step-{step}.pt")
 
                 if step % self.config.valid_interval == 0  and self.valid_loader is not None:
-                    valid_loss = 0.0
                     for valid_batch in self.valid_loader:
                         valid_batch = valid_batch['input_ids'].to(self.config.device)
-                        loss = self.valid_step(valid_batch)
-                        valid_loss += loss.item() / valid_batch.shape[0]
-                    self.writer.add_scalar('loss_valid', loss.item(), step)
+                        valid_loss = self.valid_step(valid_batch)
+                    self.writer.add_scalar('loss_valid', valid_loss.item(), step)
 
                 step += 1
 
