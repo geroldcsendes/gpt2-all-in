@@ -36,14 +36,15 @@ LAMBADA_DIR = pathlib.Path(__file__).parents[2]
 LAMBADA_PATH = LAMBADA_DIR / 'data' / 'benchmark' / 'lambada_test.jsonl'
 
 
-
 class LAMBADA(BaseBenchmark):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data_path = LAMBADA_PATH
         self.debug_sample_num = 5
 
-    def dataset(self):
+        self.dataset = None
+
+    def get_dataset(self):
         lambada_data = []
         with open(self.data_path) as f:
             for line in f:

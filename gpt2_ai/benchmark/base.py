@@ -14,8 +14,11 @@ class BaseBenchmark(ABC):
         self.tokenizer = tokenizer
         self.device = device
 
+        # later create dataset class
+        self.dataset = None
+
     @abstractmethod
-    def dataset(self):
+    def get_dataset(self):
         """
         Parse the dataset.
         """
@@ -34,3 +37,4 @@ class BaseBenchmark(ABC):
         Print a few examples of the model's predictions and the ground truth.
         """
         raise NotImplementedError
+    
