@@ -25,42 +25,66 @@ import torch as t
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import json
-from random import choices
+from random import sample
 import pathlib
 from string import punctuation
 
-from gpt2_ai.benchmark.base import BaseBenchmark
+from gpt2_ai.benchmark.base import BaseBenchmark, BaseDataset, dev_mode_sample
 
 
 LAMBADA_DIR = pathlib.Path(__file__).parents[2]
 LAMBADA_PATH = LAMBADA_DIR / 'data' / 'benchmark' / 'lambada_test.jsonl'
 
 
-class LAMBADA(BaseBenchmark):
+class LAMBADADataset(BaseDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.data_path = LAMBADA_PATH
-        self.debug_sample_num = 5
-
-        self.dataset = None
 
     def get_dataset(self):
-        lambada_data = []
-        with open(self.data_path) as f:
-            for line in f:
-                lambada_data.append(json.loads(line)['text'])
 
-        self.dataset = lambada_data
+        @dev_mode_sample
+        def f(self):
+            lambada_data = []
+            with open(self.data_path) as f:
+                for line in f:
+                    lambada_data.append(json.loads(line)['text'])
 
-    def debug_examples(self, ground_truth, pred) -> None:
+            return lambada_data
+        
+        dataset = f(self)
+        self.dataset = dataset
+
+        return
+    
+    def get_batch(self, batch_size: int):
+        # todo add batching functionality. Right now batch_size 1 is used
+        raise NotImplementedError 
+
+
+class LAMBADA(BaseBenchmark):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.debug_sample_num = 5
+
+    # def get_dataset(self):
+    #     lambada_data = []
+    #     with open(self.data_path) as f:
+    #         for line in f:
+    #             lambada_data.append(json.loads(line)['text'])
+
+    #     self.dataset = lambada_data
+
+    def debug_examples(self, ground_truth:str, pred:str, prompt:str) -> None:
         print(f"Showing {self.debug_sample_num} random mistaken predictions")
-        print("Format: ground truth - prediction")
-        rnd_idx = choices(range(len(ground_truth)), k=self.debug_sample_num)
+        print("Format: ground truth - prediction", '\n' + '-'*50)
+        rnd_idx = sample(range(len(ground_truth)), k=self.debug_sample_num)
 
         for element in rnd_idx:
-
+            print('Prompt:\n')
+            print(' '.join(prompt[element]), '\n')
             print(ground_truth[element], ' - ', pred[element])
-
+            print('-'*50, '\n')
         return
         
     def run(self):
@@ -69,7 +93,7 @@ class LAMBADA(BaseBenchmark):
         target_list = []
         out_list = []
 
-        for sample in tqdm(self.dataset):  #lambada_data
+        for sample in tqdm(self.dataset.dataset):  #lambada_data
             
             # target is the last word in the example
             target = sample.split(' ')[-1]
@@ -124,7 +148,8 @@ class LAMBADA(BaseBenchmark):
             mistake_idx = [cnt for cnt, element in enumerate(res) if not element]
             ground_truth = [element for cnt, element in enumerate(target_list) if cnt in mistake_idx]
             pred = [element for cnt, element in enumerate(out_list) if cnt in mistake_idx]
-            self.debug_examples(ground_truth=ground_truth, pred=pred)
+            prompt = [element.split(' ')[:-1] for cnt, element in enumerate(self.dataset.dataset) if cnt in mistake_idx]
+            self.debug_examples(ground_truth=ground_truth, pred=pred, prompt=prompt)
 
         return acc
 
