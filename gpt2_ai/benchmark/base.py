@@ -4,6 +4,7 @@ from random import sample
 from typing import Union, Literal
 
 from transformers import PreTrainedModel, PreTrainedTokenizer
+from datasets.arrow_dataset import Dataset
 
 from gpt2_ai.model import GPT2
 
@@ -17,22 +18,19 @@ def dev_mode_sample(func):
             # Modify behavior for dev mode
             # For example, return a small sample of the dataset
             rand_indices = sample(range(len(dataset)), k=100)
-            dataset = [element for cnt, element in enumerate(dataset) if cnt in rand_indices]
-        
+            if type(dataset) == list:
+                dataset = [element for cnt, element in enumerate(dataset) if cnt in rand_indices]
+            elif type(dataset) == Dataset:
+                dataset = dataset.select(rand_indices)
+            else:
+                raise ValueError(f"Unknown dataset type: {type(dataset)}")
         return dataset
-        
-        # if self.dev_mode:
-        #     # Modify behavior for dev mode
-        #     # For example, return a small sample of the dataset
-        #     return self.get_small_sample()  # Implement get_small_sample() accordingly
-        # else:
-        #     return func(self, *args, **kwargs)
+    
     return wrapper
 
 
 class BaseDataset(ABC):
-    def __init__(self, name: str, dev_mode: bool = False):
-        self.name = name
+    def __init__(self, dev_mode: bool = False):
         self.dev_mode = dev_mode
 
     @abstractmethod
@@ -52,14 +50,14 @@ class BaseDataset(ABC):
 
 
 class BaseBenchmark(ABC):
-    def __init__(self, name: str, model: Union[PreTrainedModel, GPT2],
+    def __init__(self, model: Union[PreTrainedModel, GPT2],
                  tokenizer: PreTrainedTokenizer, device: Literal['cpu', 'cuda'],
                  dataset: BaseDataset):
-        self.name = name
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
         self.dataset = dataset
+        self.debug_sample_num = 5  # Number of samples to show when debugging
 
     @abstractmethod
     def run(self, **kwargs) -> float: 
