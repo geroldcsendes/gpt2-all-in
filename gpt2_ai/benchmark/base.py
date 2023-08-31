@@ -74,3 +74,8 @@ class BaseBenchmark(ABC):
         raise NotImplementedError
     
 
+class BaseModel(ABC):
+    def __init__(self):
+        self.model = None
+        self.tokenizer = None
+        self.n_ctx = None
