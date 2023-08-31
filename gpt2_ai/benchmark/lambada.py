@@ -65,15 +65,6 @@ class LAMBADADataset(BaseDataset):
 class LAMBADA(BaseBenchmark):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.debug_sample_num = 5
-
-    # def get_dataset(self):
-    #     lambada_data = []
-    #     with open(self.data_path) as f:
-    #         for line in f:
-    #             lambada_data.append(json.loads(line)['text'])
-
-    #     self.dataset = lambada_data
 
     def debug_examples(self, ground_truth:str, pred:str, prompt:str) -> None:
         print(f"Showing {self.debug_sample_num} random mistaken predictions")
