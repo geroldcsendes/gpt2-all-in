@@ -36,6 +36,7 @@ def setup_loader(**kwargs) -> DataLoader:
             max_length=kwargs['conf_model'].n_ctx,
             return_tensors='np', return_attention_mask=False)
     
+    # TODO: chunk examples to n_ctx length. Use smaller batch_size and multiprocessing
     ds = ds.map(
         encode, batched=True, remove_columns=['text'])
     
