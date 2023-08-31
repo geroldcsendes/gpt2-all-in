@@ -13,11 +13,18 @@ import gpt2_ai.benchmark.benchmark_factory as bf
 LOG_DIR = pathlib.Path(__file__).parents[0] / 'logs' / "benchmark"
 
 
-if __name__ == "__main__":
+def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, choices=[_.value for _ in bf.BenchmarkType])
+    parser.add_argument("--model" , type=str, choices=[_.value for _ in bf.ModelType],
+                        default=bf.ModelType.GPT2.value)
     parser.add_argument("--dev", action="store_true", default=False)
     args = parser.parse_args()
+    return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
 
     #benchmark = bf.get_benchmark(bf.BenchmarkType.LAMBADA)
     benchmark, ds = bf.get_benchmark(args.task)
@@ -32,15 +39,17 @@ if __name__ == "__main__":
 
     device = 'gpu' if t.cuda.is_available() else 'cpu'
     
-    model = GPT2LMHeadModel.from_pretrained('gpt2')
-    model.config.pad_token_id = model.config.eos_token_id
-    model.generation_config.pad_token_id = model.config.eos_token_id
-    model.to(device)
+    model = bf.get_model(args.model)
 
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    tokenizer.pad_token = tokenizer.eos_token
+    # model = GPT2LMHeadModel.from_pretrained('gpt2')
+    # model.config.pad_token_id = model.config.eos_token_id
+    # model.generation_config.pad_token_id = model.config.eos_token_id
+    # model.to(device)
 
-    benchmark = benchmark(model=model, tokenizer=tokenizer,
+    # tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    # tokenizer.pad_token = tokenizer.eos_token
+
+    benchmark = benchmark(model=model.model, tokenizer=model.tokenizer,
                           device=device, dataset=ds)
     res = benchmark.run()
 
