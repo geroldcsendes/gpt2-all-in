@@ -18,32 +18,27 @@ from gpt2_ai.benchmark.base import BaseDataset, BaseBenchmark, dev_mode_sample
 
 
 class WikiText103Dataset(BaseDataset):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def get_batch(self, batch_size: int):
         raise NotImplementedError
-    
+
     def get_dataset(self):
-        
+
         @dev_mode_sample
         def f(self):
             ds =  load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
             return  ds
-        
+
         dataset = f(self)
 
         self.dataset = dataset
 
-        return
-    
 
 class WikiText103(BaseBenchmark):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def debug_examples(self, **kwargs):
-        pass
+    """
+    WikiText dataset.
+    """
+    def debug_examples(self, *args, **kwargs):
+        return
 
     def encode(self, example):
         # TODO: parameterize max_length
@@ -51,7 +46,6 @@ class WikiText103(BaseBenchmark):
             example['text'], truncation=True, padding='max_length',
             max_length=1024,
             return_tensors='np', return_attention_mask=False)
-    
 
     def run(self):
         # filter section names and empty lines
@@ -66,11 +60,11 @@ class WikiText103(BaseBenchmark):
         losses = []
         for sample in tqdm(loader):
             sample = sample['input_ids'].to(self.device)
-            
+
             # set padding tokens to -100 to ignore them in loss calculation
             labels = t.clone(sample)
             labels[labels == self.tokenizer.pad_token_id] = -100
-            
+
             with t.inference_mode():
                 out = self.model(sample, labels=labels, use_cache=False)
 
