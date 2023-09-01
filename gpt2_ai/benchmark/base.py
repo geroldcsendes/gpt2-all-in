@@ -10,9 +10,12 @@ from gpt2_ai.model import GPT2
 
 
 def dev_mode_sample(func):
+    """
+    Decorator for taking a random subset of the dataset when in dev mode.
+    """
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        
+
         dataset = func(self, *args, **kwargs)
         if self.dev_mode:
             # Modify behavior for dev mode
@@ -25,13 +28,17 @@ def dev_mode_sample(func):
             else:
                 raise ValueError(f"Unknown dataset type: {type(dataset)}")
         return dataset
-    
+
     return wrapper
 
 
 class BaseDataset(ABC):
+    """
+    Abstract class for datasets.
+    """
     def __init__(self, dev_mode: bool = False):
         self.dev_mode = dev_mode
+        self.dataset = None
 
     @abstractmethod
     @dev_mode_sample
@@ -50,6 +57,9 @@ class BaseDataset(ABC):
 
 
 class BaseBenchmark(ABC):
+    """
+    Abstract class for benchmarks.
+    """
     def __init__(self, model: Union[PreTrainedModel, GPT2],
                  tokenizer: PreTrainedTokenizer, device: Literal['cpu', 'cuda'],
                  dataset: BaseDataset):
@@ -60,21 +70,24 @@ class BaseBenchmark(ABC):
         self.debug_sample_num = 5  # Number of samples to show when debugging
 
     @abstractmethod
-    def run(self, **kwargs) -> float: 
+    def run(self, **kwargs) -> float:
         """
         Run the benchmark and return the score.
         """
         raise NotImplementedError
-    
+
     @abstractmethod
-    def debug_examples(self, **kwargs):
+    def debug_examples(self, *args, **kwargs):
         """
         Print a few examples of the model's predictions and the ground truth.
         """
         raise NotImplementedError
-    
+
 
 class BaseModel(ABC):
+    """
+    Abstract class for models.
+    """
     def __init__(self):
         self.model = None
         self.tokenizer = None

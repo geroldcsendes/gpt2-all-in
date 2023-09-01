@@ -3,10 +3,8 @@ from datetime import datetime
 import logging
 import pathlib
 
-from transformers import GPT2Tokenizer, GPT2Model, GPT2LMHeadModel
 import torch as t
 
-import gpt2_ai.benchmark as bm
 import gpt2_ai.benchmark.benchmark_factory as bf
 
 
@@ -14,6 +12,9 @@ LOG_DIR = pathlib.Path(__file__).parents[0] / 'logs' / "benchmark"
 
 
 def parse_args():
+    """
+    Parse command line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, choices=[_.value for _ in bf.BenchmarkType])
     parser.add_argument("--model" , type=str, choices=[_.value for _ in bf.ModelType],
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     print('Ds: ', ds.dataset[:10])
 
     device = 'gpu' if t.cuda.is_available() else 'cpu'
-    
+
     model = bf.get_model(args.model)
 
     # model = GPT2LMHeadModel.from_pretrained('gpt2')
@@ -53,4 +54,4 @@ if __name__ == "__main__":
                           device=device, dataset=ds)
     res = benchmark.run()
 
-    logging.info(f"Lambada: {res}")
+    logging.info("Lambada: %s", res)
