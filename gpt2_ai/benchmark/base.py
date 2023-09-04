@@ -6,7 +6,7 @@ from typing import Union, Literal
 from transformers import PreTrainedModel, PreTrainedTokenizer
 from datasets.arrow_dataset import Dataset
 
-from gpt2_ai.model import GPT2
+from gpt2_ai.train.model import GPT2
 
 
 def dev_mode_sample(func):
@@ -21,9 +21,9 @@ def dev_mode_sample(func):
             # Modify behavior for dev mode
             # For example, return a small sample of the dataset
             rand_indices = sample(range(len(dataset)), k=100)
-            if type(dataset) == list:
+            if isinstance(dataset, list):
                 dataset = [element for cnt, element in enumerate(dataset) if cnt in rand_indices]
-            elif type(dataset) == Dataset:
+            elif isinstance(dataset, Dataset):
                 dataset = dataset.select(rand_indices)
             else:
                 raise ValueError(f"Unknown dataset type: {type(dataset)}")
