@@ -15,9 +15,9 @@ class GPT2(nn.Module):
             num_embeddings=config.vocab_size, embedding_dim=config.d_model)
         self.pos_embedding = nn.Embedding(
             num_embeddings=config.n_ctx, embedding_dim=config.d_model)
-                
+
         self.dropout = nn.Dropout(config.embd_pdrop)
-        
+
         self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
 
         self.ln = nn.LayerNorm(config.d_model)
@@ -32,33 +32,33 @@ class GPT2(nn.Module):
             if pn.endswith('WO'):
                 t.nn.init.normal_(p, mean=0.0, std=std)
 
-        
+
     def forward(self, input_ids: Tensor) -> Tensor:
         pos_ids = t.arange(input_ids.size(-1), dtype=t.long, device=input_ids.device)
         x = self.embedding(input_ids) + self.pos_embedding(pos_ids)  # [batch_size, seq_len, n_embd]
 
         for block in self.blocks:
             x = block(x)
-        
+
         x = self.unembed(self.ln(x))
 
         return x
-    
+
     def count_params(self, non_embed=True) -> int:
         num_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         if non_embed:
             num_params -= (self.embedding.weight.numel() + self.pos_embedding.weight.numel())
-        
+
         print(f"Number of trainable parameters: {num_params:,}")
-        
+
         # return num_params
         # n_params = sum(p.numel() for p in self.parameters())
         # if non_embed:
         #     n_params -= self.pos_embedding.weight.numel()
         # return n_params
-    
+
     def _init_weights(self, module: nn.Module):
-        if isinstance(module, (nn.Linear, nn.Embedding)): 
+        if isinstance(module, (nn.Linear, nn.Embedding)):
             module.weight.data.normal_(
                 mean=0.0, std=self.config.initializer_range)
 
@@ -81,34 +81,34 @@ class CausalSelfAttention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
     def forward(self, x: Tensor) -> Tensor:
-        
+
         B, T, E = x.size()
         dh = self.d_head
         nh = self.config.n_head
 
         # [B, T, E] -> [B, nh, T, dh]
         Q = self.W_Q(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()
-        K = self.W_K(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()    
-        V = self.W_V(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()    
+        K = self.W_K(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()
+        V = self.W_V(x).view((B, T, nh, dh)).transpose(1, 2).contiguous()
 
         # [B, nh, T, dh] x [B, nh, dh, T] -> [B, nh, T, T]
-        QK = (Q @ K.transpose(-2, -1)) / t.sqrt(t.tensor(self.d_head))  
+        QK = (Q @ K.transpose(-2, -1)) / t.sqrt(t.tensor(self.d_head))
         QK.masked_fill_(self.mask == 0, -1e5)
-        
+
         A = t.softmax(QK, dim=-1)
         A = self.attn_dropout(A)
 
         # [[B, nh, T, T] x [B, nh, T, d_head]] -> [B, nh, T, dh]
         Z = A @ V
         # re-assemble all head outputs side by side
-        Z = Z.transpose(1, 2).contiguous().view(B, T, E) 
-        
+        Z = Z.transpose(1, 2).contiguous().view(B, T, E)
+
         Z = self.W_O(Z)  # [batch_size, seq_len, d_model]
 
         Z = self.resid_dropout(Z)
 
         return Z
-        
+
 
 class MLP(nn.Module):
     def __init__(self, config: GPT2Config):
