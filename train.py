@@ -11,9 +11,9 @@ from transformers import GPT2Tokenizer
 import torch as t
 from torch.utils.data import DataLoader, Dataset
 
-from gpt2_ai.model import GPT2
-from gpt2_ai.trainer import Trainer
-from gpt2_ai.config import GPT2Config, TrainerConfig
+from gpt2_ai.train.model import GPT2
+from gpt2_ai.train.trainer import Trainer
+from gpt2_ai.train.config import GPT2Config, TrainerConfig
 
 
 def setup_loader(**kwargs) -> DataLoader:
@@ -21,7 +21,7 @@ def setup_loader(**kwargs) -> DataLoader:
     dev = kwargs['dev']
 
     seed, buffer_size = 42, 10_000
-    
+
     streaming = True
     dataset_name = 'Skylion007/openwebtext'
     if dev:
@@ -35,11 +35,11 @@ def setup_loader(**kwargs) -> DataLoader:
             example['text'], truncation=True, padding='max_length',
             max_length=kwargs['conf_model'].n_ctx,
             return_tensors='np', return_attention_mask=False)
-    
+
     # TODO: chunk examples to n_ctx length. Use smaller batch_size and multiprocessing
     ds = ds.map(
         encode, batched=True, remove_columns=['text'])
-    
+
     ds = ds.with_format("torch")
 
     if dev:
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     dscr_name = osp.join('configs', args.config)
     dscr = json.load(open(dscr_name, 'r'))
-    
+
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
@@ -72,13 +72,13 @@ if __name__ == "__main__":
         dataset_name = 'Skylion007/openwebtext'
         dev = False
     else:
-        raise ValueError("Unknown dataset name")        
+        raise ValueError("Unknown dataset name")
 
     # parse model config
     conf_model = GPT2Config.model_validate(dscr['model'])
     # parse trainer config
     dscr['trainer']['dataset'] = dataset_name
-    conf_trainer = TrainerConfig.model_validate(dscr['trainer'])    
+    conf_trainer = TrainerConfig.model_validate(dscr['trainer'])
 
     device = conf_trainer.device
     print("\nUsing device:", device)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
                       model=model,
                       train_loader=loader,
                       tokenizer=tokenizer)
-    
+
     dscr_output_dir = osp.join(conf_trainer.log_path, trainer.run_name, 'config.json')
     shutil.copy(dscr_name, dscr_output_dir)
 
