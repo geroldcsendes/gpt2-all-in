@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
 import json
 from pprint import pprint
+from tqdm import tqdm
+
 import os.path as osp
 import shutil
 from typing import Tuple
@@ -13,7 +15,7 @@ import numpy as np
 from datasets import Dataset
 
 from gpt2_ai.train.model import GPT2
-from gpt2_ai.train.trainer import Trainer
+# from gpt2_ai.train.trainer import Trainer
 from gpt2_ai.train.config import GPT2Config, TrainerConfig
 
 
@@ -33,6 +35,7 @@ if __name__ == "__main__":
     conf_trainer = TrainerConfig.model_validate(dscr['trainer'])
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    tokenizer.pad_token = tokenizer.eos_token
 
     dataset_size = 100
     seq_len = conf_model.n_ctx
@@ -58,9 +61,33 @@ if __name__ == "__main__":
     model.to(device)
     model.count_params()  # print the number of parameters
 
-    sample = next(iter(loader))["input_ids"]
-    print("Sample:\n", sample)
-    print(sample.shape)
-    out = model(sample)
+    optimizer = t.optim.Adam(model.parameters(), lr=conf_trainer.lr)
+    criterion = t.nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    print(out)
+
+    EPOCHS = 100
+    model.train()
+    for epoch in range(EPOCHS):
+        for batch in loader:
+            batch = batch["input_ids"]
+            batch = batch.to(device)
+
+            logits = model(batch)[:,:-1,:]
+
+            logits = logits.reshape(-1,tokenizer.vocab_size)  # [batch_size*seq_len, vocab_size]
+            target = batch[:,1:].reshape(-1)  # [batch_size*seq_len]
+
+            loss = criterion(logits, target)
+
+            loss.backward()
+            optimizer.step()
+
+
+    # sample = next(iter(loader))["input_ids"]
+    # sample = sample.to(device)
+
+    # print("Sample:\n", sample)
+    # print(sample.shape)
+    # out = model(sample)
+
+    # print(out)
