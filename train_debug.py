@@ -46,7 +46,7 @@ if __name__ == "__main__":
     ds = Dataset.from_dict(dummy_data)
     ds.set_format("pt")
 
-    loader = DataLoader(ds, batch_size=8, shuffle=False, num_workers=4)
+    loader = DataLoader(ds, batch_size=12, shuffle=False, num_workers=4)
 
     device = conf_trainer.device
     print("\nUsing device:", device)
@@ -65,9 +65,9 @@ if __name__ == "__main__":
     criterion = t.nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
 
-    EPOCHS = 100
+    EPOCHS = 5
     model.train()
-    for epoch in range(EPOCHS):
+    for epoch in tqdm(range(EPOCHS)):
         for batch in loader:
             batch = batch["input_ids"]
             batch = batch.to(device)
