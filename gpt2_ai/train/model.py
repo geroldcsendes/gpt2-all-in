@@ -1,10 +1,12 @@
 import typing
 
 import torch as t
+import torch.utils.checkpoint as checkpoint
 from torch import Tensor
 import torch.nn as nn
 
-from gpt2_ai.config import GPT2Config
+from gpt2_ai.train.config import GPT2Config
+
 
 class GPT2(nn.Module):
     def __init__(self, config: GPT2Config):
@@ -133,9 +135,28 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(config.d_model)
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
+        self.config = config
 
     def forward(self, x: Tensor):
-        x = x + self.attn(self.ln1(x))
-        x = x + self.mlp(self.ln2(x))
+
+        if self.config.gradient_checkpoint:
+            ln_out = self.ln1(x)
+            attn_out = checkpoint.checkpoint(self.attn, ln_out)
+            # attn_out = checkpoint.checkpoint(self.attn(self.ln1), x)
+        else:
+            attn_out = self.attn(self.ln1(x))
+
+        x = x + attn_out
+
+        if self.config.gradient_checkpoint:
+            ln_out = self.ln2(x)
+            mlp_out = checkpoint.checkpoint(self.mlp, ln_out)
+        else:
+            mlp_out = self.mlp(self.ln2(x))
+
+        x = x + mlp_out
+
+        # x = x + self.attn(self.ln1(x))
+        # x = x + self.mlp(self.ln2(x))
 
         return x

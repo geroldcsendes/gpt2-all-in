@@ -1,0 +1,16 @@
+{
+    "dataset": "dev",
+    "model":
+        {
+            "n_head": 8,
+            "n_layer": 4,
+            "n_ctx": 24,
+            "d_model": 64,
+            "gradient_checkpoint": "true"
+        },
+    "trainer":
+        {
+            "n_epochs": 1,
+            "n_workers": 4
+        }
+}

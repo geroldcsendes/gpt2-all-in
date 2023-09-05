@@ -18,10 +18,11 @@ class GPT2Config(BaseModel):
     layer_norm_epsilon: float = 1e-5
     initializer_range: float = 0.02
     mlp_activation: Literal["GELU", "ReLU", "ELU"] = "GELU"
+    gradient_checkpoint: bool = False
 
 
 class TrainerConfig(BaseModel):
-    dataset: Literal["Skylion007/openwebtext", "stas/openwebtext-10k"]
+    dataset: Literal["Skylion007/openwebtext", "stas/openwebtext-10k", "debug"]
     valid_dataset: Optional[str] = None
     ckpt_path: str = './logs'
     log_path: str = './logs'
@@ -33,5 +34,5 @@ class TrainerConfig(BaseModel):
     n_epochs: int = 1
     warmup_steps: int = 0
     log_interval: int = 100
-    ckpt_interval: int = 100
+    ckpt_interval: int = 1000
     valid_interval: int = 1000
