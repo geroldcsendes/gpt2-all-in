@@ -1,0 +1,16 @@
+{
+    "dataset": "full",
+    "model":
+        {
+            "n_ctx": 1024,
+            "n_layer": 16,
+            "gradient_checkpoint": "true"
+        },
+    "trainer":
+        {
+            "n_epochs": 2,
+            "batch_size": 16,
+            "log_interval": 10,
+            "n_workers": 8
+        }
+}

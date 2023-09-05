@@ -1,9 +1,9 @@
 {
     "dataset": "dev",
-    "model": 
+    "model":
         {
             "n_ctx": 1024,
-            "n_layer": 4
+            "n_layer": 8
         },
     "trainer":
         {

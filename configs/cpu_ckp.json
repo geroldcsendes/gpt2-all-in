@@ -4,9 +4,9 @@
         {
             "n_head": 8,
             "n_layer": 4,
-            "n_ctx": 24,
-            "d_model": 64,
-            "gradient_checkpoint": "true"
+            "n_ctx": 128,
+            "d_model": 128,
+            "gradient_checkpoint": "false"
         },
     "trainer":
         {
