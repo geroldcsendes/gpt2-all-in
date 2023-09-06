@@ -27,7 +27,7 @@ You have 3 options to set up your environment:
 
 What is cool is that you will actually run the same code both on your local machine and on LambdaLabs. Thus, you should not have to worry about environment issues if all goes well.
 
-I personally like to use pyenv and poetry to manage my environments. I find it to be the most flexible and the most lightweight and very handy for local debugging. However, it takes some time to learn it and set it up. If you are not familiar with 
+I personally like to use pyenv and poetry to manage my environments. I find it to be the most flexible and the most lightweight and very handy for local debugging. However, it takes some time to learn it and set it up. If you are not familiar with
 it, I recommend you use the conda or docker option.
 
 You probably don't have to rul all the below steps for your local environment setup, assuming that you already have Pyenv + poetry / conda / docker installed. In that case, you can get by only running:
@@ -57,7 +57,7 @@ Steps:
 5. Run `poetry shell` to activate the environment
 
 ### Using conda
-4. Run `create-conda-env`
+4. Run `setup-conda`
 5. Run `conda activate gpt2-ai`
 
 ### Using docker
@@ -73,7 +73,7 @@ The configs should have 3 attributes: dataset, model and trainer as shown below:
 ```json
 {
     "dataset": "full",
-    "model": 
+    "model":
         {
             "n_head": 8,
             "n_layer": 4,
@@ -89,9 +89,9 @@ The configs should have 3 attributes: dataset, model and trainer as shown below:
 
 The dataset attribute is used to select the dataset to train on. For now, only two values are allowed: dev and full. The dev dataset is a small dataset that is used for debugging purposes and is mapped to [stas/openwebtext-10k](https://huggingface.co/datasets/stas/openwebtext-10k). This is a 10k example subsample of openwebtext. The is used for a 'proper' training and is mapped to [Skylion007/openwebtext](https://huggingface.co/datasets/Skylion007/openwebtext) which is the full openwebtext dataset.
 
-The model attribute is used to construct the model configuration and is parsed to initialize the `GPT2Config` at _config.py_. 
+The model attribute is used to construct the model configuration and is parsed to initialize the `GPT2Config` at _config.py_.
 
-The trainer attribute is used to configure the training process and is parsed to initialize the `TrainerConfig` at _config.py_. 
+The trainer attribute is used to configure the training process and is parsed to initialize the `TrainerConfig` at _config.py_.
 
 Default values in these two configuration classes will get overwritten by the values in the config file. You may experiment what configurations works best on which dataset and GPU.
 
@@ -101,7 +101,7 @@ python train.py --config {your-config-here}.json
 ```
 
 ### Logging
-A unique log directory will be created for each run under logs/. The following naming convention is used: `{run-name}-{%y%m%d%H}` e.g. jolly_ptolemy-23073110. The run name is created automatically and draws inspiration from Docker's fun container names. 
+A unique log directory will be created for each run under logs/. The following naming convention is used: `{run-name}-{%y%m%d%H}` e.g. jolly_ptolemy-23073110. The run name is created automatically and draws inspiration from Docker's fun container names.
 
 The log directory consists of 1) a checkpoint directory and 2) a tensorboard directory and 3) a the training config file (for reproducibility). Here is an example log of a training run:
 
@@ -112,7 +112,7 @@ The log directory consists of 1) a checkpoint directory and 2) a tensorboard dir
 │   └── tb
 ```
 
-> NOTE Lambdalabs, by default, will not persist your data and you will lose them after terminating the instance. You will need to take care of persistance yourself. 
+> NOTE Lambdalabs, by default, will not persist your data and you will lose them after terminating the instance. You will need to take care of persistance yourself.
 
 ### Monitoring training
 Tensorboard is used for monitoring training. You can start tensorboard by running:
@@ -127,5 +127,5 @@ tensorboard --logdir logs
 
 Finally, open your browser and go to `localhost:16006` to see the training progress.
 
-You will see something like this: 
+You will see something like this:
 ![tensorboard](./img/tb-ex.png)
