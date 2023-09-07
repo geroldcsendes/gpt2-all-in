@@ -5,13 +5,14 @@ import torch.utils.checkpoint as checkpoint
 from torch import Tensor
 import torch.nn as nn
 
-from gpt2_ai.train.config import GPT2Config
+from gpt2_ai.train.config import GPT2Config, TrainerConfig
 
 
 class GPT2(nn.Module):
-    def __init__(self, config: GPT2Config):
+    def __init__(self, config: GPT2Config, config_trainer: TrainerConfig):
         super().__init__()
         self.config = config
+        self.config_trainer = config_trainer
 
         self.embedding = nn.Embedding(
             num_embeddings=config.vocab_size, embedding_dim=config.d_model)
@@ -20,7 +21,8 @@ class GPT2(nn.Module):
 
         self.dropout = nn.Dropout(config.embd_pdrop)
 
-        self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
+        self.blocks = nn.Sequential(
+            *[Block(config, config_trainer) for _ in range(config.n_layer)])
 
         self.ln = nn.LayerNorm(config.d_model)
 
@@ -129,17 +131,18 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config: GPT2Config):
+    def __init__(self, config: GPT2Config, trainer_config: TrainerConfig):
         super().__init__()
         self.ln1 = nn.LayerNorm(config.d_model)
         self.ln2 = nn.LayerNorm(config.d_model)
         self.attn = CausalSelfAttention(config)
         self.mlp = MLP(config)
         self.config = config
+        self.config_train = trainer_config
 
     def forward(self, x: Tensor):
 
-        if self.config.gradient_checkpoint:
+        if self.config_train.gradient_checkpoint:
             ln_out = self.ln1(x)
             attn_out = checkpoint.checkpoint(self.attn, ln_out)
             # attn_out = checkpoint.checkpoint(self.attn(self.ln1), x)
@@ -148,7 +151,7 @@ class Block(nn.Module):
 
         x = x + attn_out
 
-        if self.config.gradient_checkpoint:
+        if self.config_train.gradient_checkpoint:
             ln_out = self.ln2(x)
             mlp_out = checkpoint.checkpoint(self.mlp, ln_out)
         else:
