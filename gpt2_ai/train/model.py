@@ -1,4 +1,4 @@
-import typing
+from typing import Tuple
 
 import torch as t
 import torch.utils.checkpoint as checkpoint
@@ -140,26 +140,27 @@ class Block(nn.Module):
         self.config = config
         self.config_train = trainer_config
 
+    def _add_resid(self, pre_resid_out: Tuple[Tensor, Tensor]) -> Tensor:
+        """
+        This is needed for gradient checkpointing.
+        """
+        pre_resid, out = pre_resid_out
+        return pre_resid + out
+
     def forward(self, x: Tensor):
 
-        if self.config_train.gradient_checkpoint:
-            ln_out = self.ln1(x)
-            attn_out = checkpoint.checkpoint(self.attn, ln_out)
-            # attn_out = checkpoint.checkpoint(self.attn(self.ln1), x)
-        else:
-            attn_out = self.attn(self.ln1(x))
-
-        x = x + attn_out
+        attn_out = self.attn(self.ln1(x))
 
         if self.config_train.gradient_checkpoint:
-            ln_out = self.ln2(x)
-            mlp_out = checkpoint.checkpoint(self.mlp, ln_out)
+            x = checkpoint.checkpoint(self._add_resid, (x, attn_out))
         else:
-            mlp_out = self.mlp(self.ln2(x))
+            x = x + attn_out
 
-        x = x + mlp_out
+        mlp_out = self.mlp(self.ln2(x))
 
-        # x = x + self.attn(self.ln1(x))
-        # x = x + self.mlp(self.ln2(x))
+        if self.config_train.gradient_checkpoint:
+            x = checkpoint.checkpoint(self._add_resid, (x, mlp_out))
+        else:
+            x = x + mlp_out
 
         return x
