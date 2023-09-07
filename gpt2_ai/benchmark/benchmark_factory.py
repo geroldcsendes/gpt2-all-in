@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import Union, Tuple
 
 from gpt2_ai.benchmark.lambada import LAMBADA, LAMBADADataset
 from gpt2_ai.benchmark.cbt import CBT, CBTDataset
@@ -18,7 +18,7 @@ class BenchmarkType(str, Enum):
     WIKITEXT103 = "wikitext103"
 
 
-def get_benchmark(benchmark_type: str) -> Union[BaseBenchmark, BaseDataset]:
+def get_benchmark(benchmark_type: str) -> Tuple[BaseBenchmark, BaseDataset]:
     """
     Factory function for choosing a benchmark type.
     """
