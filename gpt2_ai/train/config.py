@@ -18,7 +18,6 @@ class GPT2Config(BaseModel):
     layer_norm_epsilon: float = 1e-5
     initializer_range: float = 0.02
     mlp_activation: Literal["GELU", "ReLU", "ELU"] = "GELU"
-    gradient_checkpoint: bool = False
 
 
 class TrainerConfig(BaseModel):
@@ -36,3 +35,9 @@ class TrainerConfig(BaseModel):
     log_interval: int = 100
     ckpt_interval: int = 1000
     valid_interval: int = 1000
+    # training optimization
+    gradient_checkpoint: bool = False
+    bfloat16: bool = False
+    gradient_accumulation_steps: Optional[int] = None
+
+
