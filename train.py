@@ -102,6 +102,7 @@ if __name__ == "__main__":
 
     trainer = Trainer(config=conf_trainer,
                       model=model,
+                      trainer_config=conf_trainer,
                       train_loader=loader,
                       tokenizer=tokenizer)
 

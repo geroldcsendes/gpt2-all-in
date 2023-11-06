@@ -39,5 +39,7 @@ class TrainerConfig(BaseModel):
     gradient_checkpoint: bool = False
     bfloat16: bool = False
     gradient_accumulation_steps: Optional[int] = None
-
-
+    # compiled model does not work with gradient checkpointing as of now:
+    # https://github.com/pytorch/pytorch/issues/97077
+    #compile_model: bool = False
+    attention_opt: bool = False

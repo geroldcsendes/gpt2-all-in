@@ -9,7 +9,7 @@ CONDA = $(CONDA_BIN_DIR)/conda
 install-apt-dependencies:
 	sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config gcc zlib1g-dev libbz2-dev libssl-dev libreadline-dev libsqlite3-dev libfreetype6-dev libblas-dev liblapack-dev gfortran wget curl libncurses5-dev xz-utils libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev jq zip unzip git
 
-setup-pyenv-poetry: install-apt-dependencies 
+setup-pyenv-poetry: install-apt-dependencies
 	@curl https://pyenv.run | bash;\
 	/bin/bash ./add-pyenv-init.sh;
 	@source ./enable-pyenv.sh && \
@@ -72,3 +72,6 @@ clean-env:
 clean-ckpt-log:
 	rm -rf ckpt
 	rm -rf log
+
+# todo quikcly copy ckpt from remote
+#scp root@66.23.193.37:code/ckp/model.pt ./ckp/
