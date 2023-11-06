@@ -42,6 +42,10 @@ def get_loader(dev, tokenizer, bs=4):
     val = traintest['test']
     del dataset, traintest
 
+    if dev:
+        train = train.select(range(100))
+        val = val.select(range(20))
+
     print('train size:', len(train))
     print('val size:', len(val))
 
@@ -54,9 +58,11 @@ def get_loader(dev, tokenizer, bs=4):
         return input_ids_chosen
 
     train_loader = t.utils.data.DataLoader(
-        train, batch_size=bs, shuffle=True, collate_fn=_encode_batch)
+        train, batch_size=bs, shuffle=True, collate_fn=_encode_batch,
+        num_workers=4, pin_memory=True)
     val_loader = t.utils.data.DataLoader(
-        val, batch_size=2*bs, shuffle=True, collate_fn=_encode_batch)
+        val, batch_size=2*bs, shuffle=True, collate_fn=_encode_batch,
+        num_workers=4, pin_memory=True)
 
     return train_loader, val_loader
 
@@ -97,11 +103,7 @@ def main():
     RUN_NAME = 'SFT/SFT-dev'
 
     device = 'cuda' if t.cuda.is_available() else 'cpu'
-    BS = 2
-
     # get max vram
-
-    assert device == 'cuda' and not args.dev
 
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     tokenizer.pad_token = tokenizer.eos_token
@@ -134,7 +136,10 @@ def main():
         output_dir='ckp',
         do_train=True)
 
-    per_device_effective_batch_size = 64
+    if args.dev:
+        per_device_effective_batch_size = 4
+    else:
+        per_device_effective_batch_size = 64
     gradient_accumulation_steps = per_device_effective_batch_size // BS
 
     lr = 6e-5
@@ -153,20 +158,18 @@ def main():
 
     optimizer = Adam(model.parameters(), lr=lr)
 
-    num_training_steps = len(train_loader) // gradient_accumulation_steps * num_epochs
+    num_training_steps = len(train_loader) * num_epochs
     num_warmup_steps = num_training_steps // 10
-    num_save_steps = num_training_steps // 10
+    num_save_steps = num_training_steps // 5
 
     scheduler = get_constant_schedule_with_warmup(
         optimizer, num_warmup_steps=num_warmup_steps)
 
-    global_step = 0
-
-    sample = next(iter(train_loader)).to(device)
+    # sample = next(iter(train_loader)).to(device)
     model.to(device)
-    out = model(**sample)
+    # out = model(**sample)
 
-    dt_now = datetime.now().strftime(format="%y%m%d%H%M%s")
+    dt_now = datetime.now().strftime(format="%y-%m-%d-%H:%M:%S")
     run_name = f"{RUN_NAME}-{dt_now}"
 
     logdir = osp.join('logs', run_name)
@@ -179,9 +182,15 @@ def main():
         os.makedirs(ckpdir)
     shutil.copy(__file__, osp.join(ckpdir, 'sft.py'))
 
+    print('writing logs to:', logdir)
+    print('writing checkpoints to:', ckpdir)
+
     criterion = t.nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
     pbar = tqdm(range(len(train_loader)))
+
+    global_step = 0  # counter of ds batch level
+    global_mb_step = 0  # counter of mb level (accumulated gradients)
 
     for epoch in range(num_epochs):
 
@@ -198,15 +207,17 @@ def main():
             pbar.update(1)
 
             if global_step % gradient_accumulation_steps == 0:
+                global_mb_step += 1
+
                 optimizer.step()
                 scheduler.step()
                 optimizer.zero_grad()
 
                 running_loss /= gradient_accumulation_steps
 
-                writer.add_scalar('loss_train', running_loss, global_step)
+                writer.add_scalar('loss_train', running_loss, global_mb_step)
                 # write learning rate
-                writer.add_scalar('lr', scheduler.get_last_lr()[0], global_step)
+                writer.add_scalar('lr', scheduler.get_last_lr()[0], global_mb_step)
                 running_loss = 0.0
 
             global_step += 1
@@ -214,15 +225,17 @@ def main():
             # run validation every n steps
             if global_step % num_save_steps == 0:  # num_save_steps
                 running_val_loss = 0.0
+                print('running validation')
                 for cnt, batch in enumerate(val_loader):
-                    print(cnt)
                     batch = batch.to(device)
 
                     loss = valid_step(model, batch, tokenizer, criterion)
 
                     running_val_loss += loss.item()
 
-                writer.add_scalar('loss_valid', running_val_loss.item(), global_step)
+                running_val_loss /= len(val_loader)
+                print('val loss:', running_val_loss)
+                writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
                 t.save(
                     {
                     'state_dict': model.state_dict(),
@@ -231,7 +244,7 @@ def main():
                     'global_step': global_step,
                     'epoch': epoch
                     },
-                    f"{ckpdir}/step-{global_step}.pt")
+                    f"{ckpdir}/step-{global_mb_step}.pt")
 
     return
 
