@@ -100,7 +100,7 @@ def main():
     else:
         BS = 4
 
-    RUN_NAME = 'SFT/SFT-dev'
+    RUN_NAME = 'sft-hh-rlhf'
 
     device = 'cuda' if t.cuda.is_available() else 'cpu'
     # get max vram
@@ -180,7 +180,7 @@ def main():
         os.makedirs(logdir )
     if not os.path.exists(ckpdir):
         os.makedirs(ckpdir)
-    shutil.copy(__file__, osp.join(ckpdir, 'sft.py'))
+    shutil.copy(__file__, osp.join(logdir, 'sft.py'))
 
     print('writing logs to:', logdir)
     print('writing checkpoints to:', ckpdir)
