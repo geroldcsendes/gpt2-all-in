@@ -160,7 +160,7 @@ def main():
 
     num_training_steps = len(train_loader) * num_epochs
     num_warmup_steps = num_training_steps // 10
-    num_save_steps = num_training_steps // 4
+    num_save_steps = num_training_steps // 2
 
     scheduler = get_constant_schedule_with_warmup(
         optimizer, num_warmup_steps=num_warmup_steps)
@@ -242,18 +242,22 @@ def main():
                 print('val loss:', running_val_loss)
                 writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
 
-                if running_val_loss < best_val_loss:
-                    best_val_loss = running_val_loss
-                    print('saving checkpoint')
-                    t.save(
-                        {
-                        'state_dict': model.state_dict(),
-                        'optimizer': optimizer.state_dict(),
-                        'scheduler': scheduler.state_dict(),
-                        'global_step': global_step,
-                        'epoch': epoch
-                        },
-                        f"{ckpdir}/step-{global_mb_step}.pt")
+                # if running_val_loss < best_val_loss:
+                #     best_val_loss = running_val_loss
+                #     print('saving checkpoint')
+                #     t.save(
+                #         {
+                #         'state_dict': model.state_dict(),
+                #         'optimizer': optimizer.state_dict(),
+                #         'scheduler': scheduler.state_dict(),
+                #         'global_step': global_step,
+                #         'epoch': epoch
+                #         },
+                #         f"{ckpdir}/step-{global_mb_step}.pt")
+
+    pbar.close()
+    model.save_pretrained(logdir)
+    tokenizer.save_pretrained(logdir)
 
     return
 
