@@ -160,13 +160,13 @@ def main():
 
     num_training_steps = len(train_loader) * num_epochs
     num_warmup_steps = num_training_steps // 10
-    num_save_steps = num_training_steps // 5
+    num_save_steps = num_training_steps // 4
 
     scheduler = get_constant_schedule_with_warmup(
         optimizer, num_warmup_steps=num_warmup_steps)
 
     # sample = next(iter(train_loader)).to(device)
-    model.to(device)
+    model = model.to(device)
     # out = model(**sample)
 
     dt_now = datetime.now().strftime(format="%y-%m-%d-%H:%M:%S")
@@ -192,6 +192,8 @@ def main():
     global_step = 0  # counter of ds batch level
     global_mb_step = 0  # counter of mb level (accumulated gradients)
 
+    best_val_loss = 1e10
+
     for epoch in range(num_epochs):
 
         running_loss = 0.0
@@ -199,18 +201,18 @@ def main():
             batch = batch.to(device)
 
             loss = train_step(model, batch, tokenizer, criterion)
-
-            running_loss += loss.item()
             loss.backward()
 
-            pbar.set_description("step: %d, loss: %.3f" % (global_step, loss.item()))
+            loss_item = loss.item()
+            running_loss += loss_item
+
+            pbar.set_description("step: %d, loss: %.3f" % (global_step, loss_item))
             pbar.update(1)
 
             if global_step % gradient_accumulation_steps == 0:
                 global_mb_step += 1
 
                 optimizer.step()
-                scheduler.step()
                 optimizer.zero_grad()
 
                 running_loss /= gradient_accumulation_steps
@@ -219,6 +221,8 @@ def main():
                 # write learning rate
                 writer.add_scalar('lr', scheduler.get_last_lr()[0], global_mb_step)
                 running_loss = 0.0
+
+            scheduler.step()
 
             global_step += 1
 
@@ -230,21 +234,26 @@ def main():
                     batch = batch.to(device)
 
                     loss = valid_step(model, batch, tokenizer, criterion)
+                    loss_item = loss.item()
 
-                    running_val_loss += loss.item()
+                    running_val_loss += loss_item
 
                 running_val_loss /= len(val_loader)
                 print('val loss:', running_val_loss)
                 writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
-                t.save(
-                    {
-                    'state_dict': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'scheduler': scheduler.state_dict(),
-                    'global_step': global_step,
-                    'epoch': epoch
-                    },
-                    f"{ckpdir}/step-{global_mb_step}.pt")
+
+                if running_val_loss < best_val_loss:
+                    best_val_loss = running_val_loss
+                    print('saving checkpoint')
+                    t.save(
+                        {
+                        'state_dict': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'scheduler': scheduler.state_dict(),
+                        'global_step': global_step,
+                        'epoch': epoch
+                        },
+                        f"{ckpdir}/step-{global_mb_step}.pt")
 
     return
 
