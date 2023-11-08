@@ -212,6 +212,9 @@ def main():
             if global_step % gradient_accumulation_steps == 0:
                 global_mb_step += 1
 
+                # clip gradients
+                t.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
                 optimizer.step()
                 optimizer.zero_grad()
 
