@@ -203,20 +203,14 @@ def main():
     if args.dev:
         rm_base = GPT2Model.from_pretrained('gpt2')
 
-        # train_params = tuple([wght_pattern+idx for idx in ['11']] + wght_pattern_ln)
+        train_params = tuple([wght_pattern+idx for idx in ['11']] + wght_pattern_ln)
 
-        # # freeze weights if parameter name starts with h.11
-        # for name, param in rm_base.named_parameters():
-        #     if not name.startswith(train_params):
-        #         param.requires_grad = False
-    else:
-        rm_base = GPT2Model.from_pretrained('gpt2-medium')
-
-        train_params = tuple([wght_pattern+str(idx) for idx in range(20, 25)] + wght_pattern_ln)
-
+        # freeze weights if parameter name starts with h.11
         for name, param in rm_base.named_parameters():
-            if name.startswith(train_params):
+            if not name.startswith(train_params):
                 param.requires_grad = False
+    else:
+        rm_base = GPT2Model.from_pretrained('geroldcsendes/sft-hh-rlhf')
 
     print('Trainable params:', f"{sum(p.numel() for p in rm_base.parameters() if p.requires_grad):,}")
 
@@ -231,7 +225,7 @@ def main():
     gradient_accumulation_steps = per_device_effective_batch_size // BS
 
     lr = 6e-5
-    num_epochs = 10
+    num_epochs = 1
 
     training_args = TrainingArguments(
         per_device_train_batch_size=16,
@@ -281,22 +275,30 @@ def main():
 
     best_val_loss = 1e10
 
+    pbar = tqdm(range(len(val_loader)))
+    running_val_loss = 0.0
+    print('running pre-training validation')
+    for cnt, batch in enumerate(val_loader):
+
+        loss = valid_step(rm, batch, device)
+        loss_item = loss.item()
+
+        running_val_loss += loss_item
+
+        pbar.set_description("Valid step: %d, loss: %.3f" % (cnt, loss_item))
+        pbar.update(1)
+
+    running_val_loss /= len(val_loader)
+    print('val loss:', running_val_loss)
+    writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
+
+    pbar.close()
+
     for epoch in range(num_epochs):
 
-        running_val_loss = 0.0
-        print('running validation')
-        for cnt, batch in enumerate(val_loader):
-
-            loss = valid_step(rm, batch, device)
-            loss_item = loss.item()
-
-            running_val_loss += loss_item
-
-        running_val_loss /= len(val_loader)
-        print('val loss:', running_val_loss)
-        writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
-
+        pbar = tqdm(range(len(train_loader)))
         running_loss = 0.0
+        print('Running rm training')
         for batch in train_loader:
 
             loss = train_step(rm, batch, device)
@@ -309,8 +311,6 @@ def main():
             pbar.update(1)
 
             if global_step % gradient_accumulation_steps == 0:
-                global_mb_step += 1
-
                 # clip gradients
                 t.nn.utils.clip_grad_norm_(rm.parameters(), 1.0)
 
@@ -324,6 +324,8 @@ def main():
                 # write learning rate
                 writer.add_scalar('lr', scheduler.get_last_lr()[0], global_mb_step)
                 running_loss = 0.0
+
+                global_mb_step += 1
 
             scheduler.step()
 
