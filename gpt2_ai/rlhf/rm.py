@@ -178,7 +178,7 @@ def main():
     args = parse_args()
 
     if args.dev:
-        BS = 1
+        BS = 2
     else:
         BS = 4
 
@@ -258,10 +258,6 @@ def main():
     print('Reward model:\n', rm)
     rm = rm.to(device)
 
-    # sample = next(iter(train_loader))
-    # my = train_step(rm, sample, tokenizer=tokenizer)
-    # print(my)
-
     dt_now = datetime.now().strftime(format="%y-%m-%d-%H:%M:%S")
     run_name = f"{RUN_NAME}-{dt_now}"
 
@@ -338,8 +334,6 @@ def main():
                 running_val_loss = 0.0
                 print('running validation')
                 for cnt, batch in enumerate(val_loader):
-                    batch = batch.to(device)
-
                     loss = valid_step(rm, batch, device)
                     loss_item = loss.item()
 
@@ -348,19 +342,6 @@ def main():
                 running_val_loss /= len(val_loader)
                 print('val loss:', running_val_loss)
                 writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
-
-                # if running_val_loss < best_val_loss:
-                #     best_val_loss = running_val_loss
-                #     print('saving checkpoint')
-                #     t.save(
-                #         {
-                #         'state_dict': model.state_dict(),
-                #         'optimizer': optimizer.state_dict(),
-                #         'scheduler': scheduler.state_dict(),
-                #         'global_step': global_step,
-                #         'epoch': epoch
-                #         },
-                #         f"{ckpdir}/step-{global_mb_step}.pt")
 
     pbar.close()
     rm.save_pretrained(logdir)
