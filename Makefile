@@ -75,3 +75,6 @@ clean-ckpt-log:
 
 # todo quikcly copy ckpt from remote
 #scp root@66.23.193.37:code/ckp/model.pt ./ckp/
+
+# vastai cp
+#vastai copy 7468660:/home/gpt2-all-in/sft.zip ./
