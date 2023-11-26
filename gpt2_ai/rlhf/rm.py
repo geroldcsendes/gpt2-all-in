@@ -146,17 +146,8 @@ def train_step(model, batch, device, tokenizer=None, criterion=None):
     rejected_input = batch[0]['rejected'].to(device)
     rejected_last_idx = batch[1]['rejected'].to(device)
 
-    print('chosen input:', chosen_input)
-    print('chosen input shape:', chosen_input['input_ids'].shape)
-    print('chosen last idx:', chosen_last_idx)
-    print('chosen last idx shape:', chosen_last_idx.shape)
-
-
     chosen_out = model(chosen_last_idx, **chosen_input)
     rejected_out = model(rejected_last_idx, **rejected_input)
-
-    print('chosen out:', chosen_out)
-    print('chosen out shape:', chosen_out.shape)
 
     y_hat = t.sigmoid(chosen_out - rejected_out)
 
@@ -318,10 +309,6 @@ def main():
         for batch in train_loader:
 
             loss = train_step(rm, batch, device)
-
-            import sys
-            sys.exit(0)
-
             loss.backward()
 
             loss_item = loss.item()
@@ -354,7 +341,7 @@ def main():
             # run validation every n steps
             if global_step % num_save_steps == 0:  # num_save_steps
                 running_val_loss = 0.0
-                print('running validation')
+                print('Running validation')
                 for cnt, batch in enumerate(val_loader):
                     loss = valid_step(rm, batch, device)
                     loss_item = loss.item()
