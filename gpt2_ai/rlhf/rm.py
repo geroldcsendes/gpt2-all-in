@@ -106,20 +106,27 @@ class RewardModel(t.nn.Module):
         # base_out = self.base(**kwargs)
 
         # only take last token's hidden state
-        base_out = base_out.last_hidden_state[:,last_nonpad_idx,:]
+        bs = base_out.last_hidden_state.size(0)
+
+        base_out= (
+            base_out.last_hidden_state[t.arange(bs),last_nonpad_idx,:])
+
         out = self.reward_scalar(base_out)
 
         return out
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path, device, *model_args, **kwargs):
+    def from_pretrained(
+        cls, pretrained_model_name_or_path, device,
+        pretrained_lin_path,
+        *model_args, **kwargs):
         base_model = GPT2Model.from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
         model = cls(base_model)
 
         # Load the additional linear layer
         model.linear = t.nn.Linear(in_features=base_model.config.hidden_size, out_features=1)
         model.linear.load_state_dict(
-            t.load(os.path.join(pretrained_model_name_or_path, "pytorch_model_lin.bin"),
+            t.load(pretrained_lin_path,
                    map_location=device))
 
         return model
@@ -139,8 +146,17 @@ def train_step(model, batch, device, tokenizer=None, criterion=None):
     rejected_input = batch[0]['rejected'].to(device)
     rejected_last_idx = batch[1]['rejected'].to(device)
 
+    print('chosen input:', chosen_input)
+    print('chosen input shape:', chosen_input['input_ids'].shape)
+    print('chosen last idx:', chosen_last_idx)
+    print('chosen last idx shape:', chosen_last_idx.shape)
+
+
     chosen_out = model(chosen_last_idx, **chosen_input)
     rejected_out = model(rejected_last_idx, **rejected_input)
+
+    print('chosen out:', chosen_out)
+    print('chosen out shape:', chosen_out.shape)
 
     y_hat = t.sigmoid(chosen_out - rejected_out)
 
@@ -238,20 +254,6 @@ def main():
     if training_args.gradient_checkpointing:
         rm_base.gradient_checkpointing_enable()
 
-    optimizer = Adam(rm_base.parameters(), lr=lr)
-
-    num_training_steps = len(train_loader) * num_epochs
-    num_warmup_steps = num_training_steps // 10
-    num_save_steps = num_training_steps // 2
-
-    scheduler = get_constant_schedule_with_warmup(
-        optimizer, num_warmup_steps=num_warmup_steps)
-
-    # sample = next(iter(train_loader)).to(device)
-    rm = RewardModel(base_model=rm_base)
-    print('Reward model:\n', rm)
-    rm = rm.to(device)
-
     dt_now = datetime.now().strftime(format="%y-%m-%d-%H:%M:%S")
     run_name = f"{RUN_NAME}-{dt_now}"
 
@@ -263,10 +265,24 @@ def main():
         os.makedirs(logdir )
     if not os.path.exists(ckpdir):
         os.makedirs(ckpdir)
-    shutil.copy(__file__, osp.join(logdir, 'sft.py'))
+    shutil.copy(__file__, osp.join(logdir, 'rm.py'))
 
     print('writing logs to:', logdir)
     print('writing checkpoints to:', ckpdir)
+
+    # set up opt process
+    rm = RewardModel(base_model=rm_base)
+    print('Reward model:\n', rm)
+    rm = rm.to(device)
+
+    optimizer = Adam(rm.parameters(), lr=1e-3)
+
+    num_training_steps = len(train_loader) * num_epochs
+    num_warmup_steps = num_training_steps // 10
+    num_save_steps = num_training_steps // 2
+
+    # scheduler = get_constant_schedule_with_warmup(
+    #     optimizer, num_warmup_steps=num_warmup_steps)
 
     pbar = tqdm(range(len(train_loader)))
 
@@ -275,24 +291,24 @@ def main():
 
     best_val_loss = 1e10
 
-    pbar = tqdm(range(len(val_loader)))
-    running_val_loss = 0.0
-    print('running pre-training validation')
-    for cnt, batch in enumerate(val_loader):
+    # pbar = tqdm(range(len(val_loader)))
+    # running_val_loss = 0.0
+    # print('running pre-training validation')
+    # for cnt, batch in enumerate(val_loader):
 
-        loss = valid_step(rm, batch, device)
-        loss_item = loss.item()
+    #     loss = valid_step(rm, batch, device)
+    #     loss_item = loss.item()
 
-        running_val_loss += loss_item
+    #     running_val_loss += loss_item
 
-        pbar.set_description("Valid step: %d, loss: %.3f" % (cnt, loss_item))
-        pbar.update(1)
+    #     pbar.set_description("Valid step: %d, loss: %.3f" % (cnt, loss_item))
+    #     pbar.update(1)
 
-    running_val_loss /= len(val_loader)
-    print('val loss:', running_val_loss)
-    writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
+    # running_val_loss /= len(val_loader)
+    # print('val loss:', running_val_loss)
+    # writer.add_scalar('loss_valid', running_val_loss, global_mb_step)
 
-    pbar.close()
+    # pbar.close()
 
     for epoch in range(num_epochs):
 
@@ -302,6 +318,10 @@ def main():
         for batch in train_loader:
 
             loss = train_step(rm, batch, device)
+
+            import sys
+            sys.exit(0)
+
             loss.backward()
 
             loss_item = loss.item()
@@ -322,12 +342,12 @@ def main():
                 writer.add_scalar('loss_train', running_loss, global_mb_step)
 
                 # write learning rate
-                writer.add_scalar('lr', scheduler.get_last_lr()[0], global_mb_step)
+                # writer.add_scalar('lr', scheduler.get_last_lr()[0], global_mb_step)
                 running_loss = 0.0
 
                 global_mb_step += 1
 
-            scheduler.step()
+            # scheduler.step()
 
             global_step += 1
 
