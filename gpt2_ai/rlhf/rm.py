@@ -112,12 +112,15 @@ class RewardModel(t.nn.Module):
         return out
 
     def forward_value(self, **kwargs):
-
+        # no need of last_nonpad_idx because left padded
         base_out = self.base(**kwargs, output_attentions=False, use_cache=False)
 
         out = self.reward_scalar(base_out.last_hidden_state)
 
         return out
+
+    def gradient_checkpointing_enable(self):
+        self.base.gradient_checkpointing_enable()
 
     @classmethod
     def from_pretrained(
