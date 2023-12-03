@@ -145,7 +145,7 @@ def compute_rewards(
         sft_logprobs: t.Tensor,
         logprob_mask: t.Tensor,
         scores: t.Tensor,
-        kl_coeff=0.1):
+        kl_coeff) -> Dict[str, t.Tensor]:
 
     # compute the KL divergence: idea taken from https://github.com/vwxyzjn/ppo-implementation-details/blob/main/ppo.py
     # reference: calculate approx_kl http://joschu.net/blog/kl-approx.html
@@ -166,7 +166,10 @@ def compute_rewards(
     # reward[:, last_nonpad_idx] += scores
     reward[:, -1] += scores
 
-    return {'rewards': reward, 'approx_kl': approx_kl}
+    return {
+        'rewards': reward,
+        'approx_kl': approx_kl,
+        'rm_scores': scores}
 
 
 def compute_advantages(
@@ -255,6 +258,7 @@ class BatchContainer:
     advantages: t.Tensor
     approx_kl: t.Tensor
     returns: t.Tensor
+    reward_scores: t.Tensor
 
 
 @dataclass
@@ -281,6 +285,7 @@ class TrainStats:
     values: Optional[float] = None
     advantages: Optional[float] = None
     approx_kl: Optional[float] = None
+    reward_scores: Optional[float] = None
 
 
 def train_minibatch(
@@ -567,7 +572,7 @@ if __name__ == '__main__':
             sft_logprobs=sft_logprobs,
             logprob_mask=logprob_mask,
             scores=scores,
-            kl_coeff=0.1)
+            kl_coeff=0.02)
 
         logger.info(f"Rewards: {out['rewards']}")
         logger.info(f"Rewards shape: {out['rewards'].shape}")
@@ -589,7 +594,9 @@ if __name__ == '__main__':
             values=values,
             advantages=advantage,
             approx_kl=out['approx_kl'],
-            returns=out['rewards'])
+            returns=out['rewards'],
+            reward_scores=out['rm_scores']
+            )
 
         #region ppo update
         # TODO implement PPO update
@@ -605,7 +612,8 @@ if __name__ == '__main__':
                     values=batch_container.values[b_ind],
                     advantages=batch_container.advantages[b_ind],
                     approx_kl=batch_container.approx_kl[b_ind],
-                    returns=batch_container.returns[b_ind])
+                    returns=batch_container.returns[b_ind],
+                    reward_scores=batch_container.reward_scores[b_ind])
 
                 logger.info(f"MB query-resonse shape: {minibatch_container.query_response.shape}")
                 mb_out = batch_forward(
@@ -638,6 +646,7 @@ if __name__ == '__main__':
                 stats.values = minibatch_container.values.mean().item()
                 stats.advantages = minibatch_container.advantages.mean().item()
                 stats.approx_kl = minibatch_container.approx_kl.mean().item()
+                stats.reward_scores = minibatch_container.reward_scores.mean().item()
 
                 logger.info(f"Stats: {stats}")
 
