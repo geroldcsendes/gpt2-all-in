@@ -157,6 +157,8 @@ def compute_rewards(
     approx_kl = - approx_kl * logprob_mask
     approx_kl = kl_coeff * approx_kl
 
+
+
     logger.info(f"policy_logprobs shape: {policy_logprobs.shape}")
     logger.info(f"Approx KL shape: {approx_kl.shape}")
 
@@ -326,14 +328,15 @@ def train_minibatch(
     #endregion value loss
 
     loss = pg_loss + vf_loss * conf.vf_coef
+    loss = loss.mean()
     loss.backward()
     t.nn.utils.clip_grad_norm_(policy.parameters(), conf.max_grad_norm)
     optimizer.step()
     optimizer.zero_grad()
 
     return TrainStats(
-        policy_loss=pg_loss.item(),
-        value_loss=vf_loss.item())
+        policy_loss=pg_loss.mean().item(),
+        value_loss=vf_loss.mean().item())
 
 
 if __name__ == '__main__':
@@ -442,220 +445,221 @@ if __name__ == '__main__':
     logsoftmax = t.nn.LogSoftmax(dim=-1)
 
     global_step = 0
+    for epoch in range(num_updates):
+        for prompt, prompt_str in train_loader:
+            # prompt is a dict with keys: ['input_ids', 'attention_mask']
+            for key, v in prompt.items():
+                logger.info(f'{key}: {v.shape}')
 
-    for prompt, prompt_str in train_loader:
-        # prompt is a dict with keys: ['input_ids', 'attention_mask']
-        for key, v in prompt.items():
-            logger.info(f'{key}: {v.shape}')
-        for _ in prompt_str:
-            logger.info(f'Prompt: {_}')
+            for _ in prompt_str:
+                logger.info(f'Prompt: {_}')
 
-        #region policy
-        with t.no_grad():
-            policy.eval()
-            policy_output = policy.generate(
-                **prompt,
-                **genconf)
+            # put prompt on device
+            for key, v in prompt.items():
+                prompt[key] = v.to(device)
 
-        logger.info(f"Generated sequences shape: {policy_output.sequences.shape}")
-        logger.info(f"Generated scores shape: {policy_output.scores[0].shape}")
+            #region policy
+            with t.no_grad():
+                policy.eval()
+                policy_output = policy.generate(
+                    **prompt,
+                    **genconf)
 
-        prompt_length = prompt['input_ids'].shape[1]
-        generated_tokens = policy_output.sequences[:, prompt_length:]
-        logger.info(f"{generated_tokens.shape=}")
+            logger.info(f"Generated sequences shape: {policy_output.sequences.shape}")
+            logger.info(f"Generated scores shape: {policy_output.scores[0].shape}")
 
-        # create attention mask for policy forward where the prompt pad is masked
-        to_pad = policy_output.sequences.shape[1] - prompt['attention_mask'].shape[1]
-        prompt_response_attn_mask = t.cat(
-            [prompt['attention_mask'], t.ones(BS, to_pad)], dim=1)
+            prompt_length = prompt['input_ids'].shape[1]
+            generated_tokens = policy_output.sequences[:, prompt_length:]
+            logger.info(f"{generated_tokens.shape=}")
 
-        # get logprobs from policy
-        with t.no_grad():
-            policy.eval()
-            policy_logits = policy(
-                input_ids=policy_output.sequences,  # [bs, gen_len] contains prompt and generated tokens
-                attention_mask=prompt_response_attn_mask).logits
+            # create attention mask for policy forward where the prompt pad is masked
+            to_pad = policy_output.sequences.shape[1] - prompt['attention_mask'].shape[1]
+            prompt_response_attn_mask = t.cat(
+                [prompt['attention_mask'], t.ones(BS, to_pad, device=device)], dim=1)
 
-        # keep response logprobs only
-        policy_logits = policy_logits[:, prompt_length:, :]  # [bs, gen_len, vocab_size]
-        policy_logprobs = logsoftmax(policy_logits)  # [bs, gen_len, vocab_size]
+            # get logprobs from policy
+            with t.no_grad():
+                policy.eval()
+                policy_logits = policy(
+                    input_ids=policy_output.sequences,  # [bs, gen_len] contains prompt and generated tokens
+                    attention_mask=prompt_response_attn_mask).logits
 
-        policy_logprobs = t.gather(  # [bs, gen_len]
-            policy_logprobs, dim=-1,
-            index=generated_tokens.unsqueeze(-1)).squeeze(-1)
+            # keep response logprobs only
+            policy_logits = policy_logits[:, prompt_length:, :]  # [bs, gen_len, vocab_size]
+            policy_logprobs = logsoftmax(policy_logits)  # [bs, gen_len, vocab_size]
 
-        # get mask for padding tokens - needed for the KL divergence loss
-        logprob_mask: t.Tensor = generated_tokens != tokenizer.pad_token_id
-        logprob_mask = logprob_mask.long()
+            policy_logprobs = t.gather(  # [bs, gen_len]
+                policy_logprobs, dim=-1,
+                index=generated_tokens.unsqueeze(-1)).squeeze(-1)
 
-        logger.info(f"{policy_logprobs.shape=}")
-        logger.info(f"{policy_logprobs=}")
+            # get mask for padding tokens - needed for the KL divergence loss
+            logprob_mask: t.Tensor = generated_tokens != tokenizer.pad_token_id
+            logprob_mask = logprob_mask.long()
 
-        #endregion policy
+            logger.info(f"{policy_logprobs.shape=}")
+            logger.info(f"{policy_logprobs=}")
 
-        #region sft
-        with t.no_grad():
-            sft.eval()
-            sft_logits = sft(
-                input_ids=policy_output.sequences,  # [bs, gen_len] contains prompt and generated tokens
-                attention_mask=prompt_response_attn_mask).logits
+            #endregion policy
 
-        # keep response logprobs only
-        sft_logits = sft_logits[:, prompt_length:, :]  # [bs, gen_len, vocab_size]
-        sft_logprobs = logsoftmax(sft_logits)  # [bs, gen_len, vocab_size]
+            #region sft
+            with t.no_grad():
+                sft.eval()
+                sft_logits = sft(
+                    input_ids=policy_output.sequences,  # [bs, gen_len] contains prompt and generated tokens
+                    attention_mask=prompt_response_attn_mask).logits
 
-        sft_logprobs = t.gather(
-            sft_logprobs, dim=-1,
-            index=generated_tokens.unsqueeze(-1)).squeeze(-1)  # [bs, gen_len]
+            # keep response logprobs only
+            sft_logits = sft_logits[:, prompt_length:, :]  # [bs, gen_len, vocab_size]
+            sft_logprobs = logsoftmax(sft_logits)  # [bs, gen_len, vocab_size]
 
-        logger.info(f"SFT logprobs: {sft_logprobs}")
+            sft_logprobs = t.gather(
+                sft_logprobs, dim=-1,
+                index=generated_tokens.unsqueeze(-1)).squeeze(-1)  # [bs, gen_len]
 
-        assert sft_logprobs.shape == policy_logprobs.shape, \
-            f"Shapes of logprobs and sft_logprobs do not match: {sft_logprobs.shape} \
-              vs {policy_logprobs.shape}"
-        #endregion sft
+            logger.info(f"SFT logprobs: {sft_logprobs}")
 
-        # region helper print
-        # batch decode the generated sequences
-        decoded = tokenizer.batch_decode(policy_output.sequences, skip_special_tokens=True)
-        for _ in decoded:
-            logger.info(f"Generated decoded sequence: {_}")
+            assert sft_logprobs.shape == policy_logprobs.shape, \
+                f"Shapes of logprobs and sft_logprobs do not match: {sft_logprobs.shape} \
+                vs {policy_logprobs.shape}"
+            #endregion sft
 
-        logger.info(f"Generated token ids: {policy_output.sequences}")
-        # endregion helper print
+            # region helper print
+            # batch decode the generated sequences
+            decoded = tokenizer.batch_decode(policy_output.sequences, skip_special_tokens=True)
+            for _ in decoded:
+                logger.info(f"Generated decoded sequence: {_}")
 
-        #region rm
-        # last nonpad idx should be the same as the length of the generated tokens
-        # because the generated tokens are left padded which is handled
-        # with the attention mask in RM
-        last_nonpad_idx = (prompt_response_attn_mask.shape[1] - 1) \
-            * t.ones(BS, dtype=t.long)
+            logger.info(f"Generated token ids: {policy_output.sequences}")
+            # endregion helper print
 
-        logger.info(f"{last_nonpad_idx=}")
-        logger.info(f"Last nonpad index shape: {last_nonpad_idx.shape}")
+            #region rm
+            # last nonpad idx should be the same as the length of the generated tokens
+            # because the generated tokens are left padded which is handled
+            # with the attention mask in RM
+            last_nonpad_idx = (prompt_response_attn_mask.shape[1] - 1) \
+                * t.ones(BS, dtype=t.long, device=device)
 
-        logger.info(f"{prompt_response_attn_mask=}")
-        logger.info(f"{prompt_response_attn_mask.shape=}")
-        # get the values for the generated sequences
-        with t.no_grad():
-            rm.eval()
+            logger.info(f"{last_nonpad_idx=}")
+            logger.info(f"Last nonpad index shape: {last_nonpad_idx.shape}")
 
-            scores: t.Tensor = rm(
-                input_ids=policy_output.sequences,  # contains prompt and generated tokens
-                attention_mask=prompt_response_attn_mask,  # mask prompt left padding
-                last_nonpad_idx=last_nonpad_idx)
+            logger.info(f"{prompt_response_attn_mask=}")
+            logger.info(f"{prompt_response_attn_mask.shape=}")
+            # get the values for the generated sequences
+            with t.no_grad():
+                rm.eval()
 
-        # only keep score for the full generated sequence
-        scores = scores[:, -1] # [bs]
-        logger.info(f"{scores=}")
-        logger.info(f"{scores.shape=}")
+                scores: t.Tensor = rm(
+                    input_ids=policy_output.sequences,  # contains prompt and generated tokens
+                    attention_mask=prompt_response_attn_mask,  # mask prompt left padding
+                    last_nonpad_idx=last_nonpad_idx)
 
-        #endregion rm
+            # only keep score for the full generated sequence
+            scores = scores[:, -1] # [bs]
+            logger.info(f"{scores=}")
+            logger.info(f"{scores.shape=}")
 
-        #region value
-        with t.no_grad():
-            value.eval()
-            values = value.forward_value(
-                input_ids=policy_output.sequences,
-                attention_mask=prompt_response_attn_mask)
+            #endregion rm
 
-        # keep response values only
-        logger.info(f"PRE-{values.shape=}")
-        values = values[:, prompt_length:].squeeze(-1)  # [bs, gen_len, vocab_size]
-        logger.info(f"{values.shape=}")
+            #region value
+            with t.no_grad():
+                value.eval()
+                values = value.forward_value(
+                    input_ids=policy_output.sequences,
+                    attention_mask=prompt_response_attn_mask)
 
-        #endregion value
+            # keep response values only
+            logger.info(f"PRE-{values.shape=}")
+            values = values[:, prompt_length:].squeeze(-1)  # [bs, gen_len, vocab_size]
+            logger.info(f"{values.shape=}")
 
-        #region compute rewards
-        out = compute_rewards(
-            policy_logprobs=policy_logprobs,
-            sft_logprobs=sft_logprobs,
-            logprob_mask=logprob_mask,
-            scores=scores,
-            kl_coeff=0.02)
+            #endregion value
 
-        logger.info(f"Rewards: {out['rewards']}")
-        logger.info(f"Rewards shape: {out['rewards'].shape}")
-        logger.info(f"Approx KL: {out['approx_kl']}")
-        logger.info(f"Approx KL shape: {out['approx_kl'].shape}")
-        #endregion compute rewards
+            #region compute rewards
+            out = compute_rewards(
+                policy_logprobs=policy_logprobs,
+                sft_logprobs=sft_logprobs,
+                logprob_mask=logprob_mask,
+                scores=scores,
+                kl_coeff=0.02)
 
-        #region compute advantages
-        advantage = compute_advantages(
-            rewards=out['rewards'],
-            values=values)
+            logger.info(f"Rewards: {out['rewards']}")
+            logger.info(f"Rewards shape: {out['rewards'].shape}")
+            logger.info(f"Approx KL: {out['approx_kl']}")
+            logger.info(f"Approx KL shape: {out['approx_kl'].shape}")
+            #endregion compute rewards
 
-        #endregion compute advantages
+            #region compute advantages
+            advantage = compute_advantages(
+                rewards=out['rewards'],
+                values=values)
 
-        batch_container = BatchContainer(
-            query_response=policy_output.sequences,
-            query_response_attn_mask=prompt_response_attn_mask,
-            policy_logprobs=policy_logprobs,
-            values=values,
-            advantages=advantage,
-            approx_kl=out['approx_kl'],
-            returns=out['rewards'],
-            reward_scores=out['rm_scores']
-            )
+            #endregion compute advantages
 
-        #region ppo update
-        # TODO implement PPO update
-        for _ in range(ppo_conf.ppo_epochs):
-            b_inds = np.random.permutation(BS)
-            b_inds = np.array_split(b_inds, BS / ppo_conf.ppo_batch_size)
+            batch_container = BatchContainer(
+                query_response=policy_output.sequences,
+                query_response_attn_mask=prompt_response_attn_mask,
+                policy_logprobs=policy_logprobs,
+                values=values,
+                advantages=advantage,
+                approx_kl=out['approx_kl'],
+                returns=out['rewards'],
+                reward_scores=out['rm_scores']
+                )
 
-            for b_ind in b_inds:
-                minibatch_container = BatchContainer(
-                    query_response=batch_container.query_response[b_ind],
-                    query_response_attn_mask=batch_container.query_response_attn_mask[b_ind],
-                    policy_logprobs=batch_container.policy_logprobs[b_ind],
-                    values=batch_container.values[b_ind],
-                    advantages=batch_container.advantages[b_ind],
-                    approx_kl=batch_container.approx_kl[b_ind],
-                    returns=batch_container.returns[b_ind],
-                    reward_scores=batch_container.reward_scores[b_ind])
+            #region ppo update
+            # TODO implement PPO update
+            for _ in range(ppo_conf.ppo_epochs):
+                b_inds = np.random.permutation(BS)
+                b_inds = np.array_split(b_inds, BS / ppo_conf.ppo_batch_size)
 
-                logger.info(f"MB query-resonse shape: {minibatch_container.query_response.shape}")
-                mb_out = batch_forward(
-                    policy=policy,
-                    value_model=value,
-                    prompt_response=minibatch_container.query_response,
-                    prompt_response_attn_mask=minibatch_container.query_response_attn_mask,
-                    prompt_length=prompt_length,
-                    generated_tokens=generated_tokens[b_ind])
+                for b_ind in b_inds:
+                    minibatch_container = BatchContainer(
+                        query_response=batch_container.query_response[b_ind],
+                        query_response_attn_mask=batch_container.query_response_attn_mask[b_ind],
+                        policy_logprobs=batch_container.policy_logprobs[b_ind],
+                        values=batch_container.values[b_ind],
+                        advantages=batch_container.advantages[b_ind],
+                        approx_kl=batch_container.approx_kl[b_ind],
+                        returns=batch_container.returns[b_ind],
+                        reward_scores=batch_container.reward_scores[b_ind])
 
-                logger.info(f"MB policy logprobs shape: {mb_out['policy_logprobs'].shape}")
-                logger.info(f"MB values shape: {mb_out['values'].shape}")
-                logger.info(f"MB values: {mb_out['values']}")
+                    logger.info(f"MB query-resonse shape: {minibatch_container.query_response.shape}")
+                    mb_out = batch_forward(
+                        policy=policy,
+                        value_model=value,
+                        prompt_response=minibatch_container.query_response,
+                        prompt_response_attn_mask=minibatch_container.query_response_attn_mask,
+                        prompt_length=prompt_length,
+                        generated_tokens=generated_tokens[b_ind])
 
-                # sys.exit(0)
+                    logger.info(f"MB policy logprobs shape: {mb_out['policy_logprobs'].shape}")
+                    logger.info(f"MB values shape: {mb_out['values'].shape}")
+                    logger.info(f"MB values: {mb_out['values']}")
 
-                stats = train_minibatch(
-                    policy=policy,
-                    optimizer=optimizer,
-                    old_logprobs=minibatch_container.policy_logprobs,
-                    old_values=minibatch_container.values,
-                    logprobs=mb_out['policy_logprobs'],
-                    logprobs_mask=logprob_mask[b_ind],
-                    values=mb_out['values'],
-                    advantages=minibatch_container.advantages,
-                    returns=minibatch_container.returns,
-                    conf=ppo_conf)
+                    # sys.exit(0)
 
-                stats.returns = minibatch_container.returns.mean().item()
-                stats.values = minibatch_container.values.mean().item()
-                stats.advantages = minibatch_container.advantages.mean().item()
-                stats.approx_kl = minibatch_container.approx_kl.mean().item()
-                stats.reward_scores = minibatch_container.reward_scores.mean().item()
+                    stats = train_minibatch(
+                        policy=policy,
+                        optimizer=optimizer,
+                        old_logprobs=minibatch_container.policy_logprobs,
+                        old_values=minibatch_container.values,
+                        logprobs=mb_out['policy_logprobs'],
+                        logprobs_mask=logprob_mask[b_ind],
+                        values=mb_out['values'],
+                        advantages=minibatch_container.advantages,
+                        returns=minibatch_container.returns,
+                        conf=ppo_conf)
 
-                logger.info(f"Stats: {stats}")
+                    stats.returns = minibatch_container.returns.mean().item()
+                    stats.values = minibatch_container.values.mean().item()
+                    stats.advantages = minibatch_container.advantages.mean().item()
+                    stats.approx_kl = minibatch_container.approx_kl.mean().item()
+                    stats.reward_scores = minibatch_container.reward_scores.mean().item()
 
-                for k, v in stats.__dict__.items():
-                    writer.add_scalar(k, v, global_step=global_step)
+                    logger.info(f"Stats: {stats}")
 
-                global_step += 1
+                    for k, v in stats.__dict__.items():
+                        writer.add_scalar(k, v, global_step=global_step)
 
-                # break
-        #endregion ppo update
+                    global_step += 1
 
-        # sys.exit(0)
