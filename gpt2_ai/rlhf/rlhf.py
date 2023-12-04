@@ -346,9 +346,6 @@ if __name__ == '__main__':
 
     from huggingface_hub import hf_hub_download
     rm_linpath = hf_hub_download(repo_id="geroldcsendes/rm-hh-rlhf", filename="pytorch_model_lin.bin")
-    # print(rm_linpath)
-    # import sys
-    # sys.exit(0)
 
     #region tboard
     RUN_NAME = 'RLHF/RLHF-dev'
@@ -389,10 +386,16 @@ if __name__ == '__main__':
     # print(next(iter(train_loader)))
 
     # get the sft model
-    sft = GPT2LMHeadModel.from_pretrained('geroldcsendes/sft-hh-rlhf')
+    if args.dev:
+        sft = GPT2LMHeadModel.from_pretrained('gpt2')
+    else:
+        sft = GPT2LMHeadModel.from_pretrained('geroldcsendes/sft-hh-rlhf')
 
     # init the policy from the sft
-    policy = GPT2LMHeadModel.from_pretrained('geroldcsendes/sft-hh-rlhf')
+    if args.dev:
+        policy = GPT2LMHeadModel.from_pretrained('gpt2')
+    else:
+        policy = GPT2LMHeadModel.from_pretrained('geroldcsendes/sft-hh-rlhf')
     policy.to(device)
 
     # get the rm model
@@ -452,7 +455,7 @@ if __name__ == '__main__':
         for prompt, prompt_str in train_loader:
             # prompt is a dict with keys: ['input_ids', 'attention_mask']
             for key, v in prompt.items():
-                logger.info(f'{key}: {v.shape}')
+                logger.debug(f'{key}: {v.shape}')
 
             for _ in prompt_str:
                 logger.info(f'Prompt: {_}')
@@ -468,12 +471,12 @@ if __name__ == '__main__':
                     **prompt,
                     **genconf)
 
-            logger.info(f"Generated sequences shape: {policy_output.sequences.shape}")
-            logger.info(f"Generated scores shape: {policy_output.scores[0].shape}")
+            logger.debug(f"Generated sequences shape: {policy_output.sequences.shape}")
+            logger.debug(f"Generated scores shape: {policy_output.scores[0].shape}")
 
             prompt_length = prompt['input_ids'].shape[1]
             generated_tokens = policy_output.sequences[:, prompt_length:]
-            logger.info(f"{generated_tokens.shape=}")
+            logger.debug(f"{generated_tokens.shape=}")
 
             # create attention mask for policy forward where the prompt pad is masked
             to_pad = policy_output.sequences.shape[1] - prompt['attention_mask'].shape[1]
@@ -499,8 +502,8 @@ if __name__ == '__main__':
             logprob_mask: t.Tensor = generated_tokens != tokenizer.pad_token_id
             logprob_mask = logprob_mask.long()
 
-            logger.info(f"{policy_logprobs.shape=}")
-            logger.info(f"{policy_logprobs=}")
+            logger.debug(f"{policy_logprobs.shape=}")
+            logger.debug(f"{policy_logprobs=}")
 
             #endregion policy
 
@@ -519,7 +522,7 @@ if __name__ == '__main__':
                 sft_logprobs, dim=-1,
                 index=generated_tokens.unsqueeze(-1)).squeeze(-1)  # [bs, gen_len]
 
-            logger.info(f"SFT logprobs: {sft_logprobs}")
+            logger.debug(f"SFT logprobs: {sft_logprobs}")
 
             assert sft_logprobs.shape == policy_logprobs.shape, \
                 f"Shapes of logprobs and sft_logprobs do not match: {sft_logprobs.shape} \
@@ -532,7 +535,7 @@ if __name__ == '__main__':
             for _ in decoded:
                 logger.info(f"Generated decoded sequence: {_}")
 
-            logger.info(f"Generated token ids: {policy_output.sequences}")
+            logger.debug(f"Generated token ids: {policy_output.sequences}")
             # endregion helper print
 
             #region rm
@@ -542,10 +545,10 @@ if __name__ == '__main__':
             last_nonpad_idx = (prompt_response_attn_mask.shape[1] - 1) \
                 * t.ones(BS, dtype=t.long, device=device)
 
-            logger.info(f"{last_nonpad_idx=}")
-            logger.info(f"Last nonpad index shape: {last_nonpad_idx.shape}")
+            logger.debug(f"{last_nonpad_idx=}")
+            logger.debug(f"Last nonpad index shape: {last_nonpad_idx.shape}")
 
-            logger.info(f"{prompt_response_attn_mask=}")
+            logger.debug(f"{prompt_response_attn_mask=}")
             logger.info(f"{prompt_response_attn_mask.shape=}")
             # get the values for the generated sequences
             with t.no_grad():
@@ -559,7 +562,7 @@ if __name__ == '__main__':
             # only keep score for the full generated sequence
             scores = scores[:, -1] # [bs]
             logger.info(f"{scores=}")
-            logger.info(f"{scores.shape=}")
+            logger.debug(f"{scores.shape=}")
 
             #endregion rm
 
@@ -571,9 +574,9 @@ if __name__ == '__main__':
                     attention_mask=prompt_response_attn_mask)
 
             # keep response values only
-            logger.info(f"PRE-{values.shape=}")
+            logger.debug(f"PRE-{values.shape=}")
             values = values[:, prompt_length:].squeeze(-1)  # [bs, gen_len, vocab_size]
-            logger.info(f"{values.shape=}")
+            logger.debug(f"{values.shape=}")
 
             #endregion value
 
@@ -586,9 +589,9 @@ if __name__ == '__main__':
                 kl_coeff=0.02)
 
             logger.info(f"Rewards: {out['rewards']}")
-            logger.info(f"Rewards shape: {out['rewards'].shape}")
+            logger.debug(f"Rewards shape: {out['rewards'].shape}")
             logger.info(f"Approx KL: {out['approx_kl']}")
-            logger.info(f"Approx KL shape: {out['approx_kl'].shape}")
+            logger.debug(f"Approx KL shape: {out['approx_kl'].shape}")
             #endregion compute rewards
 
             #region compute advantages
@@ -626,7 +629,7 @@ if __name__ == '__main__':
                         returns=batch_container.returns[b_ind],
                         reward_scores=batch_container.reward_scores[b_ind])
 
-                    logger.info(f"MB query-resonse shape: {minibatch_container.query_response.shape}")
+                    logger.debug(f"MB query-resonse shape: {minibatch_container.query_response.shape}")
                     mb_out = batch_forward(
                         policy=policy,
                         value_model=value,
@@ -635,9 +638,9 @@ if __name__ == '__main__':
                         prompt_length=prompt_length,
                         generated_tokens=generated_tokens[b_ind])
 
-                    logger.info(f"MB policy logprobs shape: {mb_out['policy_logprobs'].shape}")
-                    logger.info(f"MB values shape: {mb_out['values'].shape}")
-                    logger.info(f"MB values: {mb_out['values']}")
+                    logger.debug(f"MB policy logprobs shape: {mb_out['policy_logprobs'].shape}")
+                    logger.debug(f"MB values shape: {mb_out['values'].shape}")
+                    logger.debug(f"MB values: {mb_out['values']}")
 
                     # sys.exit(0)
 
@@ -665,4 +668,5 @@ if __name__ == '__main__':
                         writer.add_scalar(k, v, global_step=global_step)
 
                     global_step += 1
+            #endregion ppo update
 
