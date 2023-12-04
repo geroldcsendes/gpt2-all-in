@@ -323,6 +323,9 @@ def train_minibatch(
     vf_losses1 = t.square(values - returns)
     vf_losses2 = t.square(vpredclipped - returns)
     vf_loss = 0.5 * masked_mean(t.max(vf_losses1, vf_losses2), logprobs_mask)
+
+    # clip vf loss
+    vf_loss = t.clamp(vf_loss, 0, 2)
     #endregion value loss
 
     loss = pg_loss + vf_loss * conf.vf_coef
