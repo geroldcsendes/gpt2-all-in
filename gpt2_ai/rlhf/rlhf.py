@@ -365,7 +365,7 @@ if __name__ == '__main__':
     # higher BS can be used because this will only be used for inference (
     # create experience)
     if args.dev:
-        BS = 2
+        BS = 4
     else:
         BS = 4
 
@@ -409,9 +409,9 @@ if __name__ == '__main__':
 
     # initialize the value function from the reward model
     if args.dev:
-        # value = RMMock()
-        value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
-                                            pretrained_lin_path=rm_linpath)
+        value = RMMock()
+        # value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
+        #                                     pretrained_lin_path=rm_linpath)
     else:
         value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
                                             pretrained_lin_path=rm_linpath)
@@ -602,7 +602,7 @@ if __name__ == '__main__':
                 rewards=out['rewards'],
                 values=values)  # [bs, gen_len]
 
-            logger.info(f"{advantage=}")
+            logger.debug(f"{advantage=}")
             #endregion compute advantages
 
             batch_container = BatchContainer(
@@ -623,6 +623,7 @@ if __name__ == '__main__':
                 b_inds = np.array_split(b_inds, BS / ppo_conf.ppo_batch_size)
 
                 for b_ind in b_inds:
+                    logger.debug(f"{b_ind=}")
                     minibatch_container = BatchContainer(
                         query_response=batch_container.query_response[b_ind],
                         query_response_attn_mask=batch_container.query_response_attn_mask[b_ind],
@@ -672,5 +673,7 @@ if __name__ == '__main__':
                         writer.add_scalar(k, v, global_step=global_step)
 
                     global_step += 1
+                    if args.dev:
+                        if global_step == 8:
+                            sys.exit(0)
             #endregion ppo update
-
