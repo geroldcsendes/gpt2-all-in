@@ -74,6 +74,7 @@ def get_genconf(tokenizer, dev=False) -> dict:
 
         # rlhf "parameters"
         num_return_sequences=1,
+        max_length=None,
         max_new_tokens=30,  # TODO increase this later
         output_scores=True,
         return_dict_in_generate=True,  # output ModelOutput instead of tensors
@@ -157,16 +158,15 @@ def compute_rewards(
     approx_kl = - approx_kl * logprob_mask
     approx_kl = kl_coeff * approx_kl
 
-
-
-    logger.info(f"policy_logprobs shape: {policy_logprobs.shape}")
-    logger.info(f"Approx KL shape: {approx_kl.shape}")
+    logger.debug(f"policy_logprobs shape: {policy_logprobs.shape}")
+    logger.debug(f"Approx KL shape: {approx_kl.shape}")
 
     reward = approx_kl.clone()
-    logger.info(f"Reward shape: {reward.shape}")
-    logger.info(f"Scores shape: {scores.shape}")
-    # reward[:, last_nonpad_idx] += scores
-    reward[:, -1] += scores
+    logger.debug(f"Reward shape: {reward.shape}")
+    logger.debug(f"Scores shape: {scores.shape}")
+
+    # reward is given at the last token of the generated sequence
+    reward[:, -1] += scores.squeeze(-1)
 
     return {
         'rewards': reward,
@@ -216,8 +216,6 @@ def batch_forward(
         input_ids=prompt_response,
         attention_mask=prompt_response_attn_mask)
 
-    print(f"{values.shape=}")
-
     # keep response values only
     values = values[:, prompt_length:, :].squeeze(-1)  # [bs, gen_len]
 
@@ -235,7 +233,8 @@ class RMMock(t.nn.Module):
         # get reward for 'ale' token
         #reward = t.sum(input_ids == 1000, dim=1, keepdim=True).float()
         reward = (input_ids == 1000).float()
-        reward += t.rand_like(reward) * 0.1
+        reward = reward.sum(dim=1, keepdim=True)
+        reward += t.rand_like(reward) * 0.05
 
         return reward
 
@@ -243,7 +242,7 @@ class RMMock(t.nn.Module):
         # get reward for 'ale' token
         #reward = t.sum(input_ids == 1000, dim=1, keepdim=True).float()
         reward = (input_ids == 1000).float()
-        reward += t.rand_like(reward) * 0.1
+        reward += t.rand_like(reward) * 0.05
 
         return reward.unsqueeze(-1)
 
@@ -276,7 +275,6 @@ class PPOConfig:
     cliprange_value: float = 0.2
     max_grad_norm: float = 0.5
     vf_coef: float = 0.1
-    learning_rate: float = 1e-5
 
 
 @dataclass
@@ -356,6 +354,8 @@ if __name__ == '__main__':
     logdir = osp.join('logs', run_name)
     ckpdir = osp.join('ckp', run_name)
     writer = SummaryWriter(osp.join(logdir, 'tb'))
+
+    shutil.copy(__file__, osp.join(logdir, 'rlhf.py'))
     #endregion tboard
 
     logger = setup_logger('my.log')
@@ -409,9 +409,9 @@ if __name__ == '__main__':
 
     # initialize the value function from the reward model
     if args.dev:
-        value = RMMock()
-        # value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
-        #                                     pretrained_lin_path=rm_linpath)
+        # value = RMMock()
+        value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
+                                            pretrained_lin_path=rm_linpath)
     else:
         value = RewardModel.from_pretrained('geroldcsendes/rm-hh-rlhf', device=device,
                                             pretrained_lin_path=rm_linpath)
@@ -458,7 +458,7 @@ if __name__ == '__main__':
                 logger.debug(f'{key}: {v.shape}')
 
             for _ in prompt_str:
-                logger.info(f'Prompt: {_}')
+                logger.debug(f'Prompt: {_}')
 
             # put prompt on device
             for key, v in prompt.items():
@@ -479,6 +479,8 @@ if __name__ == '__main__':
             logger.debug(f"{generated_tokens.shape=}")
 
             # create attention mask for policy forward where the prompt pad is masked
+            # the model should attend to the prompt but not to the left padding
+            # later the logits for the prompts will be removed
             to_pad = policy_output.sequences.shape[1] - prompt['attention_mask'].shape[1]
             prompt_response_attn_mask = t.cat(
                 [prompt['attention_mask'], t.ones(BS, to_pad, device=device)], dim=1)
@@ -490,15 +492,18 @@ if __name__ == '__main__':
                     input_ids=policy_output.sequences,  # [bs, gen_len] contains prompt and generated tokens
                     attention_mask=prompt_response_attn_mask).logits
 
-            # keep response logprobs only
+            # keep response logprobs only, mask out prompt logits
             policy_logits = policy_logits[:, prompt_length:, :]  # [bs, gen_len, vocab_size]
             policy_logprobs = logsoftmax(policy_logits)  # [bs, gen_len, vocab_size]
 
+            # get logprobs for the generated tokens -> approx KL later
             policy_logprobs = t.gather(  # [bs, gen_len]
                 policy_logprobs, dim=-1,
                 index=generated_tokens.unsqueeze(-1)).squeeze(-1)
 
             # get mask for padding tokens - needed for the KL divergence loss
+            # TODO what about if the pad token is actually the eos token?
+            # the first eos should be kept
             logprob_mask: t.Tensor = generated_tokens != tokenizer.pad_token_id
             logprob_mask = logprob_mask.long()
 
@@ -549,21 +554,20 @@ if __name__ == '__main__':
             logger.debug(f"Last nonpad index shape: {last_nonpad_idx.shape}")
 
             logger.debug(f"{prompt_response_attn_mask=}")
-            logger.info(f"{prompt_response_attn_mask.shape=}")
+            logger.debug(f"{prompt_response_attn_mask.shape=}")
             # get the values for the generated sequences
             with t.no_grad():
                 rm.eval()
-
+                # [bs, 1]
                 scores: t.Tensor = rm(
                     input_ids=policy_output.sequences,  # contains prompt and generated tokens
                     attention_mask=prompt_response_attn_mask,  # mask prompt left padding
                     last_nonpad_idx=last_nonpad_idx)
 
             # only keep score for the full generated sequence
-            scores = scores[:, -1] # [bs]
+            # scores = scores[:, -1] # [bs]
             logger.info(f"{scores=}")
             logger.debug(f"{scores.shape=}")
-
             #endregion rm
 
             #region value
@@ -574,10 +578,9 @@ if __name__ == '__main__':
                     attention_mask=prompt_response_attn_mask)
 
             # keep response values only
-            logger.debug(f"PRE-{values.shape=}")
-            values = values[:, prompt_length:].squeeze(-1)  # [bs, gen_len, vocab_size]
+            logger.debug(f"PRE-{values.shape=}")  # [bs, prompt+gen_len, 1]
+            values = values[:, prompt_length:].squeeze(-1) # [bs, gen_len]
             logger.debug(f"{values.shape=}")
-
             #endregion value
 
             #region compute rewards
@@ -590,26 +593,27 @@ if __name__ == '__main__':
 
             logger.info(f"Rewards: {out['rewards']}")
             logger.debug(f"Rewards shape: {out['rewards'].shape}")
-            logger.info(f"Approx KL: {out['approx_kl']}")
+            logger.debug(f"Approx KL: {out['approx_kl']}")
             logger.debug(f"Approx KL shape: {out['approx_kl'].shape}")
             #endregion compute rewards
 
             #region compute advantages
             advantage = compute_advantages(
                 rewards=out['rewards'],
-                values=values)
+                values=values)  # [bs, gen_len]
 
+            logger.info(f"{advantage=}")
             #endregion compute advantages
 
             batch_container = BatchContainer(
-                query_response=policy_output.sequences,
-                query_response_attn_mask=prompt_response_attn_mask,
-                policy_logprobs=policy_logprobs,
-                values=values,
-                advantages=advantage,
-                approx_kl=out['approx_kl'],
-                returns=out['rewards'],
-                reward_scores=out['rm_scores']
+                query_response=policy_output.sequences,  # [bs, prompt+gen_len]
+                query_response_attn_mask=prompt_response_attn_mask,  # [bs, prompt+gen_len]
+                policy_logprobs=policy_logprobs,  # [bs, gen_len]
+                values=values,  # [bs, gen_len]
+                advantages=advantage,  # [bs, gen_len]
+                approx_kl=out['approx_kl'],  # [bs, gen_len]
+                returns=out['rewards'],  # [bs, gen_len]
+                reward_scores=out['rm_scores']  # [bs, 1]
                 )
 
             #region ppo update
